@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>账号与密码 · 每日任务</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="account.css">
+</head>
+<body class="account-page">
+  <main class="account-card">
+    <a class="account-back" id="account-home" href="index.html">← 返回每日任务</a>
+    <h1 id="account-title">账号与密码</h1>
+    <p class="account-description">导航网和每日任务网共用账号；修改一次密码，两个网站都会生效。</p>
+    <p id="account-message" class="account-message" role="status" aria-live="polite">正在检查登录状态…</p>
+    <section id="account-login-needed" hidden>
+      <p>请先返回网站登录，再打开“修改密码”。</p>
+      <a class="account-button secondary" href="account.html?mode=forgot">忘记密码？</a>
+    </section>
+    <section id="account-request-section" hidden aria-labelledby="account-request-title">
+      <h2 id="account-request-title">找回密码</h2>
+      <p class="account-description">填写注册时使用的邮箱，打开邮件中的链接设置新密码。</p>
+      <form id="account-request-form">
+        <label for="account-email">注册邮箱</label>
+        <input id="account-email" type="email" autocomplete="username" required>
+        <button class="account-button" id="account-send" type="submit">发送重置邮件</button>
+      </form>
+    </section>
+    <section id="account-change-section" hidden aria-labelledby="account-change-title">
+      <h2 id="account-change-title">修改密码</h2>
+      <p id="account-user" class="account-user"></p>
+      <form id="account-change-form">
+        <div id="account-current-wrap">
+          <label for="account-current">当前密码</label>
+          <input id="account-current" type="password" autocomplete="current-password" required>
+        </div>
+        <label for="account-new">新密码</label>
+        <input id="account-new" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        <label for="account-confirm">再次输入新密码</label>
+        <input id="account-confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        <p class="account-description">新密码至少 8 个字符。</p>
+        <div id="account-nonce-wrap" hidden>
+          <label for="account-nonce">邮箱验证码</label>
+          <input id="account-nonce" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12">
+        </div>
+        <button class="account-button" id="account-save" type="submit">保存新密码</button>
+      </form>
+    </section>
+    <p id="account-complete" hidden><a class="account-button" href="index.html">返回每日任务</a></p>
+    <button id="account-retry" class="account-button secondary" type="button" hidden>重新检查登录状态</button>
+  </main>
+  <noscript>请开启浏览器 JavaScript 后管理密码。</noscript>
+  <script>window.ACCOUNT_SITE = {"title":"每日任务","storageKey":"daily-checkin-auth-v1"};</script>
+  <script src="supabase-2.118.0.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="account.js"></script>
+</body>
+</html>

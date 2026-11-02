@@ -1,5 +1,6 @@
 (function() {
   'use strict';
+  if (window.__ACCOUNT_REDIRECT__) return;
   const $ = id => document.getElementById(id);
   const app = window.DailyApp, sync = window.DailySync;
   let client, engine = null, epoch = 0, pendingView = false, viewBase = sync.empty();
