@@ -25,7 +25,7 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
     <input id="cloud-password" type="password" autocomplete="current-password" required>
     <button class="add-task-btn" type="submit">登录并同步</button>
   </form>
-  <p class="account-links"><a class="account-link" id="forgot-password-link" href="account.html?mode=forgot">忘记密码？</a></p>
+  <p class="account-links"><a class="account-link" id="change-password-link" href="account.html" target="_blank" rel="noopener">修改密码</a> · <a class="account-link" id="forgot-password-link" href="account.html?mode=forgot">忘记密码？</a></p>
   <p id="cloud-auth-message" role="status" aria-live="polite">正在恢复登录状态…</p>
   <button id="cloud-retry" type="button" class="history-today-btn">重试连接</button>
 </section>
@@ -48,7 +48,7 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
   <div class="cloud-toolbar">
     <span id="cloud-account"></span>
     <span id="cloud-status" role="status" aria-live="polite">正在连接…</span>
-    <button id="cloud-sync-now" type="button" class="history-today-btn">同步</button><a class="account-link account-toolbar-link" id="change-password-link" href="account.html" target="_blank" rel="noopener">修改密码</a>
+    <button id="cloud-sync-now" type="button" class="history-today-btn">同步</button>
     <button id="cloud-sign-out" type="button" class="history-today-btn">退出</button>
   </div>
 

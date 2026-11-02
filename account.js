@@ -11,7 +11,7 @@
   let client, user = null, recoveryConfirmed = false, recovery = false, busy = false, completed = false, checkEpoch = 0;
   function message(text, kind = '') { $('account-message').textContent = text; $('account-message').dataset.kind = kind; }
   function hideForms() {
-    for (const id of ['account-login-needed', 'account-request-section', 'account-change-section', 'account-complete', 'account-retry']) $(id).hidden = true;
+    for (const id of ['account-request-section', 'account-change-section', 'account-complete', 'account-retry']) $(id).hidden = true;
   }
   function clearSecrets() {
     for (const id of ['account-current', 'account-new', 'account-confirm', 'account-nonce']) $(id).value = '';
@@ -28,6 +28,19 @@
     hideForms(); $('account-request-section').hidden = false;
     $('account-title').textContent = '找回密码';
     message(text);
+  }
+  function showChange(account, viaRecovery = false) {
+    user = account; recovery = viaRecovery;
+    hideForms(); $('account-change-section').hidden = false;
+    $('account-title').textContent = recovery ? '设置新密码' : '修改密码';
+    $('account-change-title').textContent = recovery ? '邮箱验证已完成' : '修改密码';
+    $('account-user').textContent = account?.email || '';
+    $('account-change-email-wrap').hidden = !!account || recovery;
+    $('account-change-email').required = !account && !recovery;
+    $('account-current-wrap').hidden = recovery; $('account-current').required = !recovery;
+    $('account-nonce-wrap').hidden = true; $('account-nonce').required = false;
+    message(recovery ? '请设置新密码，两个网站将共用这个密码。' :
+      account ? '先验证当前密码，再保存新密码。' : '填写注册邮箱和当前密码，验证后设置新密码。');
   }
   function setBusy(value) {
     busy = value;
@@ -66,8 +79,8 @@
       }
       if (mode === 'forgot' && !incomingRecovery && !recoveryConfirmed) { showRequest(); return; }
       if (initialized.error) {
-        $('account-login-needed').hidden = false; $('account-retry').hidden = false;
-        message('登录状态检查未完成，请返回网站登录，或检查网络后重试。', 'error'); return;
+        showChange(null); $('account-retry').hidden = false;
+        message('登录状态检查未完成；可填写邮箱和当前密码验证，或检查网络后重试。', 'error'); return;
       }
       if (incomingRecovery && !recoveryConfirmed) {
         clearMarker(); showRequest('未能确认重置链接，请重新申请邮件并打开最新链接。'); return;
@@ -78,8 +91,10 @@
         user = null; clearMarker(); hideForms();
         if (incomingRecovery || mode === 'reset') showRequest('重置验证已失效，请重新申请邮件。');
         else {
-          $('account-login-needed').hidden = false; $('account-retry').hidden = false;
-          message(result.error && (!result.error.status || result.error.status >= 500) ? '无法检查登录状态，请检查连接后重试。' : '当前未登录。');
+          showChange(null);
+          if (result.error && (!result.error.status || result.error.status >= 500)) {
+            $('account-retry').hidden = false; message('无法检查登录状态，请检查连接后重试。', 'error');
+          }
         }
         return;
       }
@@ -87,12 +102,7 @@
       let marker = null; try { marker = sessionStorage.getItem(recoveryKey); } catch {}
       recovery = recoveryConfirmed || (mode === 'reset' && marker === user.id);
       if (mode === 'reset' && !recovery) { showRequest('请先从重置邮件中打开有效链接。'); return; }
-      hideForms(); $('account-change-section').hidden = false;
-      $('account-title').textContent = recovery ? '设置新密码' : '修改密码';
-      $('account-change-title').textContent = recovery ? '邮箱验证已完成' : '修改密码';
-      $('account-user').textContent = user.email || '已验证的账号';
-      $('account-current-wrap').hidden = recovery; $('account-current').required = !recovery;
-      message(recovery ? '请设置新密码，两个网站将共用这个密码。' : '先验证当前密码，再保存新密码。');
+      showChange(user, recovery);
     } catch { message('无法检查登录状态，请检查网络后重试。', 'error'); $('account-retry').hidden = false; }
   }
   $('account-request-form').addEventListener('submit', async event => {
@@ -109,19 +119,26 @@
   });
   $('account-change-form').addEventListener('submit', async event => {
     event.preventDefault();
-    if (busy || completed || !client || !user || !$('account-change-form').reportValidity()) return;
+    if (busy || completed || !client || !$('account-change-form').reportValidity()) return;
     const next = $('account-new').value, previous = $('account-current').value;
     if (next.length < 8) { message('新密码至少需要 8 个字符。', 'error'); return; }
     if (next !== $('account-confirm').value) { message('两次输入的新密码不一致。', 'error'); return; }
     if (!recovery && !previous) { message('请输入当前密码。', 'error'); return; }
     if (!recovery && next === previous) { message('新密码不能与当前密码相同。', 'error'); return; }
-    const expectedUserId = user.id;
+    const expectedUserId = user?.id || null;
+    const suppliedEmail = $('account-change-email').value.trim();
+    if (!expectedUserId && !recovery && !suppliedEmail) { message('请输入注册邮箱。', 'error'); return; }
+    if (recovery && !expectedUserId) { showRequest('重置验证已失效，请重新申请邮件。'); return; }
     setBusy(true); message(recovery ? '正在设置新密码…' : '正在验证当前密码…');
     let verifier = null, changed = false;
     try {
-      const checked = await client.auth.getUser();
-      if (checked.error || checked.data?.user?.id !== expectedUserId) {
-        message('当前账号或验证已发生变化，请重新登录后再试。', 'error'); return;
+      let email = suppliedEmail;
+      if (expectedUserId) {
+        const checked = await client.auth.getUser();
+        if (checked.error || checked.data?.user?.id !== expectedUserId) {
+          message('当前账号或验证已发生变化，请重新打开修改密码页面后再试。', 'error'); return;
+        }
+        email = checked.data.user.email;
       }
       let auth, verifiedSession = null;
       verifier = window.supabase.createClient(config.url, config.publishableKey,
@@ -129,11 +146,11 @@
       if (!recovery) {
         // A non-persistent client verifies the old password without replacing
         // either website's saved session when the verification fails.
-        const result = await verifier.auth.signInWithPassword({email: checked.data.user.email, password: previous});
+        const result = await verifier.auth.signInWithPassword({email, password: previous});
         if (result.error) {
-          message(result.error.code === 'invalid_credentials' ? '当前密码不正确，请重新输入。' : friendly(result.error), 'error'); return;
+          message(result.error.code === 'invalid_credentials' ? '邮箱或当前密码不正确，请重新输入。' : friendly(result.error), 'error'); return;
         }
-        if (result.data?.user?.id !== expectedUserId || !result.data.session) {
+        if (!result.data?.user?.id || !result.data.session || (expectedUserId && result.data.user.id !== expectedUserId)) {
           message('账号验证未通过，请重新登录后再试。', 'error'); return;
         }
         auth = verifier.auth; verifiedSession = result.data.session;
@@ -192,7 +209,7 @@
       if (event === 'PASSWORD_RECOVERY') { rememberRecovery(session); setTimeout(inspect, 0); }
       else if (event === 'SIGNED_OUT') {
         checkEpoch++; user = null; recovery = false; clearMarker(); clearSecrets();
-        if (!completed) { hideForms(); $('account-login-needed').hidden = false; message('登录已退出，请返回网站重新登录。'); }
+        if (!completed) { showChange(null); message('登录已退出，可填写注册邮箱和当前密码进行修改。'); }
       }
     });
     inspect();

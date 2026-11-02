@@ -14,10 +14,6 @@
     <h1 id="account-title">账号与密码</h1>
     <p class="account-description">导航网和每日任务网共用账号；修改一次密码，两个网站都会生效。</p>
     <p id="account-message" class="account-message" role="status" aria-live="polite">正在检查登录状态…</p>
-    <section id="account-login-needed" hidden>
-      <p>请先返回网站登录，再打开“修改密码”。</p>
-      <a class="account-button secondary" href="account.html?mode=forgot">忘记密码？</a>
-    </section>
     <section id="account-request-section" hidden aria-labelledby="account-request-title">
       <h2 id="account-request-title">找回密码</h2>
       <p class="account-description">填写注册时使用的邮箱，打开邮件中的链接设置新密码。</p>
@@ -31,9 +27,14 @@
       <h2 id="account-change-title">修改密码</h2>
       <p id="account-user" class="account-user"></p>
       <form id="account-change-form">
+        <div id="account-change-email-wrap" hidden>
+          <label for="account-change-email">注册邮箱</label>
+          <input id="account-change-email" type="email" autocomplete="username">
+        </div>
         <div id="account-current-wrap">
           <label for="account-current">当前密码</label>
           <input id="account-current" type="password" autocomplete="current-password" required>
+          <p class="account-links"><a class="account-link" href="account.html?mode=forgot">忘记当前密码？</a></p>
         </div>
         <label for="account-new">新密码</label>
         <input id="account-new" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
