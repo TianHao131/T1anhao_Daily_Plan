@@ -370,6 +370,10 @@
     return state.monthlyRecords[monthKey][taskId] === true;
   }
 
+  function isMonthlyTaskOverdue(task) {
+    return task.category !== TEMPORARY_TAG && task.date < getTodayKey() && !isMonthlyTaskCompleted(task.id, task.monthKey);
+  }
+
   function toggleMonthlyTask(taskId, monthKey) {
     if (!state.monthlyRecords[monthKey]) state.monthlyRecords[monthKey] = {};
     if (state.monthlyRecords[monthKey][taskId]) {
@@ -517,12 +521,13 @@
     var endKey = formatDateKey(endDate);
     var result = [];
 
-    // 纳入：未来7天内的所有任务 + 已过期且未完成的任务
+    // 临时任务不设过期，未完成时始终保留；其他任务包含未来7天和逾期项。
     state.monthlyTasks.forEach(function(t) {
       var completed = isMonthlyTaskCompleted(t.id, t.monthKey);
       var inWindow = t.date >= todayKey && t.date <= endKey;
-      var overdue = t.date < todayKey && !completed;
-      if (inWindow || overdue) {
+      var overdue = isMonthlyTaskOverdue(t);
+      var pendingTemporary = t.category === TEMPORARY_TAG && !completed;
+      if (inWindow || overdue || pendingTemporary) {
         result.push({
           source: 'monthly',
           task: t,
@@ -541,8 +546,8 @@
       var aTemporary = a.task.category === TEMPORARY_TAG ? 0 : 1;
       var bTemporary = b.task.category === TEMPORARY_TAG ? 0 : 1;
       if (aTemporary !== bTemporary) return aTemporary - bTemporary;
-      var aOverdue = (!a.completed && a.dateKey < todayKey) ? 0 : 1;
-      var bOverdue = (!b.completed && b.dateKey < todayKey) ? 0 : 1;
+      var aOverdue = isMonthlyTaskOverdue(a.task) ? 0 : 1;
+      var bOverdue = isMonthlyTaskOverdue(b.task) ? 0 : 1;
       if (aOverdue !== bOverdue) return aOverdue - bOverdue;
       var aCat = categoryRank(a.task.category);
       var bCat = categoryRank(b.task.category);
@@ -757,7 +762,7 @@
         dateBadge.title = task.date;
         content.appendChild(dateBadge);
       }
-      if (type === 'monthly' && !completed && task.date && task.date < getTodayKey()) {
+      if (type === 'monthly' && isMonthlyTaskOverdue(task)) {
         var overdueBadge = document.createElement('span');
         overdueBadge.className = 'task-badge overdue';
         overdueBadge.textContent = '已过期';
@@ -1103,7 +1108,7 @@
     var temporary = state.monthlyTasks.filter(function(t) { return t.category === TEMPORARY_TAG; });
     var pending = temporary.filter(function(t) { return !isMonthlyTaskCompleted(t.id, t.monthKey); }).sort(function(a,b) { return a.date.localeCompare(b.date); });
     var scheduled = temporary.filter(function(t) { return t.date === key; });
-    var overdue = state.monthlyTasks.filter(function(t) { return t.category !== TEMPORARY_TAG && t.date < key && !isMonthlyTaskCompleted(t.id,t.monthKey); }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+    var overdue = state.monthlyTasks.filter(isMonthlyTaskOverdue).sort(function(a,b) { return a.date.localeCompare(b.date); });
     function fill(id, tasks, type, empty) {
       var list = document.getElementById(id); list.innerHTML = '';
       if (!tasks.length) { var row = document.createElement('li'); row.className = 'quiet-empty'; row.textContent = empty; list.appendChild(row); }
@@ -1264,12 +1269,12 @@
       pendingScrollDate = null;
     }
 
-    // ===== 渲染待办任务列表（右侧面板：已过期 + 未来7天）=====
+    // ===== 渲染待办任务列表（全部未完成临时任务 + 其他逾期/未来7天）=====
     var todayParsed = parseDateKey(getTodayKey());
     var endParsed = new Date(todayParsed.getFullYear(), todayParsed.getMonth(), todayParsed.getDate() + 6);
     document.getElementById('week-panel-title').textContent = '待办任务';
     document.getElementById('week-panel-subtitle').textContent =
-      '已过期 + 未来7天（' +
+      '临时任务 + 其他逾期及未来7天（' +
       (todayParsed.getMonth() + 1) + '/' + todayParsed.getDate() + ' - ' +
       (endParsed.getMonth() + 1) + '/' + endParsed.getDate() + '）';
 
@@ -1313,7 +1318,7 @@
         }
 
         // 已过期标签（超过设定日期仍未完成）
-        if (!item.completed && item.dateKey < getTodayKey()) {
+        if (isMonthlyTaskOverdue(item.task)) {
           var itemOverdue = document.createElement('span');
           itemOverdue.className = 'task-badge overdue';
           itemOverdue.textContent = '已过期';
