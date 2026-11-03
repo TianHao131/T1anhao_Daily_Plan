@@ -1886,6 +1886,7 @@
   }
 
   window.DailyApp = {
+    uiVersion: 2,
     snapshot: function() { return DailySync.clone(state); },
     busy: function() {
       var el = document.activeElement;

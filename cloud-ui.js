@@ -6,6 +6,17 @@
   let client, engine = null, epoch = 0, pendingView = false, viewBase = sync.empty();
   let editLock = null;
   const message = text => { $('cloud-auth-message').textContent = text; };
+  function reloadPage() {
+    const url = new URL(location.href);
+    url.searchParams.set('reload', Date.now().toString(36));
+    location.replace(url.href);
+  }
+  function checkPageVersion() {
+    const expected = Number(document.querySelector('meta[name="daily-ui-version"]')?.content);
+    if (!app || !expected || app.uiVersion !== expected) {
+      throw Error('页面文件版本不一致，请点击“重试连接”重新加载完整页面。');
+    }
+  }
   function status(text, kind = '') {
     $('cloud-status').textContent = text;
     $('cloud-status').dataset.kind = kind;
@@ -87,6 +98,7 @@
   async function resume() {
     if (!client) return;
     const token = ++epoch;
+    let stage = 'session';
     message('正在恢复登录状态…');
     try {
       const sessionResult = await client.auth.getSession();
@@ -96,6 +108,7 @@
         if (engine) lock();
         message(sessionResult.error ? '无法恢复登录，请检查网络后重试。' : '请登录每日任务同步账号；以后会自动保持登录。'); return;
       }
+      stage = 'account';
       const result = await client.auth.getUser();
       if (token !== epoch) return;
       const networkFailure = result.error && (!result.error.status || result.error.status >= 500);
@@ -105,11 +118,14 @@
         message('登录状态已失效，请重新登录。'); return;
       }
       if (engine?.userId === user.id) { engine.sync(); return; }
+      stage = 'tab-lock';
       if (!await claimTab(user.id)) {
         message('每日任务已在另一个标签页打开。请关闭那个标签页，再点击这里的“重试连接”。'); return;
       }
       if (token !== epoch) return;
+      stage = 'page-reset';
       engine?.stop(); app.reset(); viewBase = sync.empty();
+      stage = 'cache';
       const next = new sync.Engine({
         userId: user.id, remote: adapter(user.id), storage: localStorage,
         onChange(data) {
@@ -132,10 +148,20 @@
         if (opening) applyView(next.state.data, true);
         if (next.conflict) { status('存在未处理的同步冲突。', 'conflict'); showConflict(next.conflict.conflicts); }
       }
+      stage = 'page-reveal';
       reveal();
       if (result.error) status('暂时无法连接云端，已打开本机缓存。修改会暂存在本机。', 'pending');
-      else { await next.sync(); reveal(); }
-    } catch { if (token === epoch) message('连接未完成，请检查网络后点击重试。'); }
+      else { stage = 'sync'; await next.sync(); stage = 'page-reveal'; reveal(); }
+    } catch (error) {
+      if (token !== epoch) return;
+      if (stage === 'page-reset' || stage === 'page-reveal') {
+        message('页面恢复失败，请点击“重试连接”重新加载页面。账号密码无需修改。');
+        $('cloud-retry').onclick = reloadPage;
+        console.error('每日任务页面恢复失败（' + stage + '）', error);
+      } else {
+        message('账号连接未完成，请检查网络后点击重试。');
+      }
+    }
   }
   $('cloud-login-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -150,7 +176,7 @@
     } catch { message('暂时无法登录，请检查网络后重试。'); }
     finally { button.disabled = false; }
   });
-  $('cloud-retry').onclick = () => client ? resume() : location.reload();
+  $('cloud-retry').onclick = () => client ? resume() : reloadPage();
   $('cloud-sync-now').onclick = () => { flushView(); engine?.sync(); };
   $('cloud-sign-out').onclick = async () => {
     if (engine?.state.dirty && !confirm('本机还有未同步的修改，已保存在此账号的缓存中。确定退出？')) return;
@@ -184,6 +210,7 @@
     if (engine?.state.dirty) { event.preventDefault(); event.returnValue = ''; }
   });
   try {
+    checkPageVersion();
     const config = window.NAV_CLOUD_CONFIG;
     if (!window.supabase || !config?.url || !config?.publishableKey) throw Error('同步组件未加载，请刷新后重试。');
     client = window.supabase.createClient(config.url, config.publishableKey, {
@@ -203,5 +230,9 @@
       else if (event === 'SIGNED_IN' && session) setTimeout(resume, 0);
     });
     resume();
-  } catch (error) { message(error.message || '同步组件未加载，请刷新后重试。'); }
+  } catch (error) {
+    message(error.message || '同步组件未加载，请刷新后重试。');
+    $('cloud-login-form').querySelector('button').disabled = true;
+    $('cloud-retry').onclick = reloadPage;
+  }
 })();
