@@ -36,9 +36,9 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
     <h1 class="app-title">每日任务</h1>
     <div style="display:flex;align-items:center;gap:8px;">
       <nav class="nav-tabs">
-        <button class="nav-tab active" data-route="today">今日</button>
+        <button class="nav-tab active" data-route="today">待办</button>
         <button class="nav-tab" data-route="monthly">每月</button>
-        <button class="nav-tab" data-route="stats">统计</button>
+        <button class="nav-tab" data-route="stats">签到</button>
       </nav>
       <button class="data-btn" id="data-btn" title="数据备份与恢复">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
@@ -72,18 +72,23 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
     <input type="file" id="import-file" accept=".json" style="display:none;">
   </div>
 
-  <!-- 今日 -->
+  <!-- 待办：临时任务与无日期计划 -->
   <section class="view active" id="view-today">
     <div class="today-header">
-      <div class="today-date" id="today-date"></div>
-      <div class="today-weekday" id="today-weekday"></div>
+      <h2 class="today-title">待办</h2>
+      <p class="today-description">临时插入的事，现在处理；有空再做的事，留在计划里。</p>
+      <div class="today-date-line"><span id="today-date"></span><span id="today-weekday"></span></div>
       <div class="today-progress-bar"><div class="today-progress-fill" id="today-progress-fill" style="width:0%"></div></div>
       <div class="today-progress-text" id="today-progress-text">还没有任务，添加一个开始吧</div>
     </div>
     <div class="today-todo-columns">
       <section class="today-todo-panel" aria-labelledby="scheduled-title">
-        <h2 class="section-title" id="scheduled-title">今日待办</h2>
-        <p class="today-todo-note">今天安排的任务</p>
+        <div class="planned-heading"><h2 class="section-title" id="scheduled-title">临时任务</h2><span id="temporary-task-count" aria-live="polite"></span></div>
+        <p class="today-todo-note">默认安排在今天，自动加入每月任务并优先显示</p>
+        <form class="add-task-form" id="add-temporary-form">
+          <input type="text" class="add-task-input" id="add-temporary-input" aria-label="新增临时任务" placeholder="记下临时要处理的事" maxlength="50" required>
+          <button type="submit" class="add-task-btn">添加</button>
+        </form>
         <ul class="task-list" id="today-scheduled-list"></ul>
       </section>
       <section class="today-todo-panel planned-panel" aria-labelledby="planned-title">
@@ -96,11 +101,7 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
         <ul class="task-list" id="planned-task-list"></ul>
       </section>
     </div>
-    <form class="add-task-form" id="add-task-form">
-      <input type="text" class="add-task-input" id="add-task-input" placeholder="添加每日习惯，例如：阅读30分钟" maxlength="50">
-      <button type="submit" class="add-task-btn">添加</button>
-    </form>
-    <h2 class="section-title">每日习惯</h2><ul class="task-list" id="task-list"></ul><h2 class="section-title">逾期未完成</h2><ul class="task-list" id="today-overdue-list"></ul>
+    <h2 class="section-title">其他逾期任务</h2><ul class="task-list" id="today-overdue-list"></ul>
   </section>
 
   <!-- 每月 -->
@@ -167,10 +168,10 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
     <div class="monthly-hint">日历会一直保留记过任务的日期，可上下滚动查看任意旧日期；点击日期查看当天任务。添加的任务归到当前选中的日期。</div>
   </section>
 
-  <!-- 统计 -->
+  <!-- 签到：仅统计每日习惯 -->
   <section class="view" id="view-stats">
     <div class="stats-header">
-      <h2 class="stats-title">月度统计</h2>
+      <h2 class="stats-title">签到</h2>
       <div class="month-nav">
         <button class="month-nav-btn" id="prev-month-stats" aria-label="上一月">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
@@ -181,34 +182,54 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
         </button>
       </div>
     </div>
-    <div class="stats-overview" id="stats-overview"></div>
-    <div class="heatmap-section">
-      <h3 class="section-title">完成热力图</h3>
-      <div class="heatmap-weekdays" id="heatmap-weekdays"></div>
-      <div class="heatmap-grid" id="heatmap-grid"></div>
-      <div class="heatmap-legend">
-        <span>少</span>
-        <div class="heatmap-legend-cell" style="background:var(--border-light)"></div>
-        <div class="heatmap-legend-cell level-1"></div>
-        <div class="heatmap-legend-cell level-2"></div>
-        <div class="heatmap-legend-cell level-3"></div>
-        <div class="heatmap-legend-cell level-4"></div>
-        <span>多</span>
-      </div>
-    </div>
-    <div class="history-section">
-      <h3 class="section-title">历史日详情</h3>
-      <div class="history-date-row">
-        <input type="date" class="history-date-input" id="history-date-input">
-        <button class="history-today-btn" id="history-today-btn">回到今天</button>
-      </div>
-      <div class="history-summary" id="history-summary"></div>
-      <ul class="task-list" id="history-task-list"></ul>
-      <div class="history-hint">点击上方热力图中的任意日期，可快速查看那天的完成情况。</div>
-    </div>
-    <div class="task-stats-section">
-      <h3 class="section-title">各任务完成情况</h3>
-      <div id="task-stats-list"></div>
+    <div class="checkin-layout">
+      <section class="checkin-trend" aria-labelledby="habit-trend-title">
+        <div class="checkin-card-header">
+          <div><h3 class="section-title" id="habit-trend-title">习惯完成趋势</h3><p class="checkin-note">每天完成的每日习惯数量</p></div>
+          <span class="checkin-unit">单位：项</span>
+        </div>
+        <div class="stats-overview" id="stats-overview"></div>
+        <div class="habit-chart" id="habit-chart" aria-label="本月每日习惯完成数量柱状图"></div>
+        <p class="habit-chart-detail" id="habit-chart-detail"></p>
+        <details class="habit-breakdown">
+          <summary>各习惯本月完成情况</summary>
+          <div id="task-stats-list"></div>
+        </details>
+      </section>
+      <section class="habit-manager" aria-labelledby="habit-manager-title">
+        <div class="checkin-card-header"><h3 class="section-title" id="habit-manager-title">管理每日习惯</h3><span class="checkin-note" id="habit-manager-count"></span></div>
+        <p class="checkin-note habit-manager-note">添加、修改或调整顺序。删除后不再每日出现，历史打卡仍保留。</p>
+        <form class="add-task-form" id="add-task-form">
+          <input type="text" class="add-task-input" id="add-task-input" aria-label="新增每日习惯" placeholder="添加每日习惯，例如：阅读30分钟" maxlength="50" required>
+          <button type="submit" class="add-task-btn">添加</button>
+        </form>
+        <ul class="task-list" id="task-list"></ul>
+      </section>
+      <aside class="checkin-daily" aria-label="签到记录与日常任务">
+        <section class="heatmap-section" aria-labelledby="checkin-heatmap-title">
+          <div class="checkin-card-header"><h3 class="section-title" id="checkin-heatmap-title">签到记录</h3><span class="checkin-note" id="heatmap-range"></span></div>
+          <div class="heatmap-grid" id="heatmap-grid" aria-label="本月签到热力图"></div>
+          <div class="heatmap-legend" aria-label="颜色越深，完成的习惯越多">
+            <span>少</span>
+            <span class="heatmap-legend-cell"></span>
+            <span class="heatmap-legend-cell level-1"></span>
+            <span class="heatmap-legend-cell level-2"></span>
+            <span class="heatmap-legend-cell level-3"></span>
+            <span class="heatmap-legend-cell level-4"></span>
+            <span>多</span>
+          </div>
+        </section>
+        <section class="history-section" aria-labelledby="checkin-habits-title">
+          <h3 class="section-title" id="checkin-habits-title">日常任务</h3>
+          <div class="history-date-row">
+            <input type="date" class="history-date-input" id="history-date-input" aria-label="选择签到日期">
+            <button type="button" class="history-today-btn" id="history-today-btn">今天</button>
+          </div>
+          <div class="history-summary" id="history-summary" role="status" aria-live="polite"></div>
+          <ul class="task-list checkin-habits" id="history-task-list"></ul>
+          <p class="history-hint">点击热力图或柱状图切换日期，可补签或取消完成。</p>
+        </section>
+      </aside>
     </div>
   </section>
 </div>

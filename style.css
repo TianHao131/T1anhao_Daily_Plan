@@ -80,6 +80,9 @@ body {
 
 /* 今日视图 */
 .today-header { margin-bottom: 28px; }
+.today-title { font-family: var(--font-serif); font-size: 1.8rem; font-weight: 700; }
+.today-description { color: var(--text-secondary); font-size: .85rem; margin: 4px 0 10px; }
+.today-date-line { display: flex; gap: 12px; flex-wrap: wrap; font-size: .8rem; color: var(--text-secondary); }
 .today-date { font-family: var(--font-serif); font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
 .today-weekday { font-size: 0.9rem; color: var(--text-secondary); }
 .today-progress-bar { margin-top: 16px; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
@@ -550,40 +553,72 @@ body {
 .empty-state-icon svg { width: 100%; height: 100%; stroke: var(--text-secondary); stroke-width: 1.5; fill: none; }
 .empty-state-text { font-size: 0.9rem; line-height: 1.8; }
 
-/* 统计视图 */
+/* 签到视图 */
 .stats-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
 .stats-title { font-family: var(--font-serif); font-size: 1.5rem; font-weight: 700; }
-.stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
-.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px 16px; text-align: center; }
-.stat-value { font-family: var(--font-serif); font-size: 1.8rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.checkin-layout { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr); grid-template-areas: "trend daily" "manage daily"; grid-template-rows: auto 1fr; gap: 20px; align-items: start; }
+.checkin-trend, .checkin-daily, .habit-manager { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.checkin-trend { grid-area: trend; padding: 22px; }
+.checkin-daily { grid-area: daily; overflow: hidden; }
+.habit-manager { grid-area: manage; padding: 22px; }
+.habit-manager-note { margin: 4px 0 16px; }
+.habit-manager .task-list { margin-bottom: 0; }
+.habit-manager .task-item { padding: 12px; }
+.habit-manager .task-actions, .habit-manager .task-delete { opacity: 1; }
+.habit-manager .add-task-input, #add-temporary-input { min-width: 0; }
+.checkin-card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.checkin-card-header .section-title { margin-bottom: 4px; }
+.checkin-note, .checkin-unit { color: var(--text-secondary); font-size: .75rem; }
+.checkin-unit { white-space: nowrap; }
+.stats-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0 28px; }
+.stat-card { padding: 0; }
+.stat-value { font-family: var(--font-serif); font-size: 1.65rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
 .stat-label { font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; }
 
-.heatmap-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 28px; }
+.habit-chart { position: relative; padding-left: 30px; padding-bottom: 28px; }
+.habit-chart-plot { height: 264px; position: relative; }
+.habit-chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-light); pointer-events: none; }
+.habit-chart-gridline span { position: absolute; right: calc(100% + 10px); top: 0; transform: translateY(-50%); font-size: .7rem; color: var(--text-secondary); }
+.habit-chart-bars { height: 100%; display: grid; grid-template-columns: repeat(var(--chart-days), minmax(0, 1fr)); gap: 4px; position: relative; }
+.habit-chart-day { min-width: 0; height: 100%; border: 0; background: transparent; padding: 0; display: flex; align-items: flex-end; cursor: pointer; border-radius: 4px 4px 0 0; }
+.habit-chart-day:hover { background: var(--accent-light); }
+.habit-chart-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.habit-chart-bar { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .65; }
+.habit-chart-day.selected .habit-chart-bar, .habit-chart-day:hover .habit-chart-bar { opacity: 1; }
+.habit-chart-day.selected { box-shadow: inset 0 -3px var(--accent); }
+.habit-chart-day:disabled { cursor: default; opacity: .4; background: transparent; }
+.habit-chart-axis { position: relative; margin-top: 9px; height: 18px; color: var(--text-secondary); font-size: .7rem; }
+.habit-chart-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.habit-chart-axis span:first-child { transform: none; }
+.habit-chart-axis span:last-child { transform: translateX(-100%); }
+.habit-chart-detail { min-height: 24px; font-size: .8rem; color: var(--text-secondary); padding-top: 5px; }
+.habit-breakdown { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.habit-breakdown summary { color: var(--text-secondary); font-size: .8rem; cursor: pointer; }
+.habit-breakdown[open] summary { margin-bottom: 8px; }
+.heatmap-section { padding: 20px; }
 .section-title { font-family: var(--font-serif); font-size: 1.05rem; font-weight: 600; margin-bottom: 18px; }
-.heatmap-weekdays { display: grid; grid-template-columns: 28px repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
-.heatmap-weekday-label { font-size: 0.7rem; color: var(--text-muted); text-align: center; line-height: 16px; }
-.heatmap-weekday-label.empty { visibility: hidden; }
-.heatmap-grid { display: grid; grid-template-columns: 28px repeat(7, 1fr); gap: 4px; }
-.heatmap-week-label { font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; line-height: 1; }
+.heatmap-grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; margin-top: 16px; }
 .heatmap-cell {
-  aspect-ratio: 1; border-radius: 4px; background: var(--border-light); cursor: default;
+  aspect-ratio: 1; min-width: 0; padding: 0; border: 0; border-radius: 3px; background: var(--border-light); cursor: pointer;
   transition: transform 0.15s ease; position: relative;
 }
-.heatmap-cell.has-data:hover { transform: scale(1.15); z-index: 1; }
-.heatmap-cell.level-1 { background: #D4E5D9; }
-.heatmap-cell.level-2 { background: #A8CCB2; }
-.heatmap-cell.level-3 { background: #7CB38B; }
-.heatmap-cell.level-4 { background: var(--accent); }
-.heatmap-cell.today { outline: 2px solid var(--accent); outline-offset: 1px; }
-.heatmap-cell.future { background: transparent; cursor: default; }
-.heatmap-legend { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 14px; font-size: 0.72rem; color: var(--text-muted); }
-.heatmap-legend-cell { width: 12px; height: 12px; border-radius: 3px; }
+.heatmap-cell:not(:disabled):hover { transform: scale(1.15); z-index: 1; }
+.heatmap-cell.level-1, .heatmap-legend-cell.level-1 { background: #D4E5D9; }
+.heatmap-cell.level-2, .heatmap-legend-cell.level-2 { background: #A8CCB2; }
+.heatmap-cell.level-3, .heatmap-legend-cell.level-3 { background: #7CB38B; }
+.heatmap-cell.level-4, .heatmap-legend-cell.level-4 { background: var(--accent); }
+.heatmap-cell.today { box-shadow: inset 0 0 0 1px var(--accent); }
+.heatmap-cell.selected { outline: 2px solid var(--text-primary); outline-offset: 1px; z-index: 1; }
+.heatmap-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-index: 2; }
+.heatmap-cell.future { opacity: .35; cursor: default; }
+.heatmap-legend { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 12px; font-size: 0.7rem; color: var(--text-secondary); }
+.heatmap-legend-cell { width: 9px; height: 9px; border-radius: 2px; background: var(--border-light); }
 
-/* 历史日详情 */
-.history-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 28px; }
-.history-date-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+/* 所选日期的每日习惯，可补签 */
+.history-section { border-top: 1px solid var(--border); padding: 20px; }
+.history-date-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .history-date-input {
-  font-family: var(--font-sans); font-size: 0.9rem; padding: 8px 12px;
+  font-family: var(--font-sans); font-size: 0.8rem; padding: 7px 9px; max-width: 100%; min-width: 0;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card);
   color: var(--text-primary); outline: none; cursor: pointer;
 }
@@ -597,6 +632,23 @@ body {
 .history-summary { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px; }
 .history-summary strong { color: var(--accent); font-weight: 600; }
 .history-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; }
+.checkin-habits .task-item { padding: 10px 0; margin: 0; border: 0; border-bottom: 1px solid var(--border-light); border-radius: 0; gap: 10px; }
+.checkin-habits .task-item:last-child { border-bottom: 0; }
+.checkin-habits .task-name { font-size: .85rem; overflow-wrap: anywhere; }
+.checkin-habits .task-checkbox { width: 21px; height: 21px; min-width: 21px; padding: 0; background: var(--card); cursor: pointer; }
+.checkin-habits .task-item.completed .task-checkbox { background: var(--accent); }
+.checkin-habits .task-checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.checkin-habits .task-checkbox:disabled { cursor: not-allowed; opacity: .35; }
+.month-nav-btn:disabled { opacity: .35; cursor: default; }
+.task-stat-header { gap: 12px; }
+.task-stat-name { overflow-wrap: anywhere; }
+.task-stat-count { flex-shrink: 0; }
+
+@media (max-width: 900px) {
+  .checkin-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trend" "daily" "manage"; grid-template-rows: auto; }
+  .checkin-daily { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .checkin-daily .history-section { border-top: 0; border-left: 1px solid var(--border); }
+}
 
 .task-stats-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
 .task-stat-item { padding: 16px 0; border-bottom: 1px solid var(--border-light); }
@@ -613,7 +665,19 @@ body {
   .app-header { flex-direction: column; gap: 16px; align-items: flex-start; }
   .today-date { font-size: 1.6rem; }
   .monthly-title-large { font-size: 1.5rem; }
-  .stats-overview { grid-template-columns: 1fr; }
+  .stats-header { gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .checkin-trend, .habit-manager { padding: 16px; }
+  .habit-manager .task-item { flex-wrap: wrap; }
+  .habit-manager .task-actions { margin-left: auto; flex-wrap: wrap; }
+  .stats-overview { gap: 8px; margin: 18px 0 24px; }
+  .stat-label { font-size: .7rem; }
+  .stat-value { font-size: 1.4rem; }
+  .habit-chart-bars { gap: 2px; }
+  .habit-chart-plot { height: 210px; }
+  .habit-chart-axis .chart-axis-secondary { display: none; }
+  .checkin-daily { display: block; }
+  .checkin-daily .history-section { border-left: 0; border-top: 1px solid var(--border); padding: 16px; }
+  .task-stat-header { flex-wrap: wrap; }
   .add-task-form { flex-direction: column; }
   .add-task-btn { width: 100%; }
   .task-delete { opacity: 1; }

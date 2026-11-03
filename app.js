@@ -24,6 +24,14 @@
   var selectedHistoryDate = getTodayKey();
 
   var WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+  var TEMPORARY_TAG = '临时任务';
+
+  // System label is supplied to old data in memory; it is saved with the next user edit.
+  function ensureTemporaryTag() {
+    var index = state.tags.findIndex(function(tag) { return tag.name === TEMPORARY_TAG; });
+    if (index < 0) state.tags.unshift({ name: TEMPORARY_TAG, color: '#8E44AD' });
+    else if (index > 0) state.tags.unshift(state.tags.splice(index, 1)[0]);
+  }
 
   // ===== 数据层 =====
   function loadState(source) {
@@ -124,10 +132,12 @@
         // Migration is saved only after validation and explicit import.
       }
     } catch (e) { console.error('加载数据失败', e); throw e; }
+    ensureTemporaryTag();
   }
 
   function saveState() {
     if (!window.DailyCloud) { showStatus('同步组件未加载，请保留备份并重新打开网页', true); return false; }
+    ensureTemporaryTag();
     var saved = window.DailyCloud.commit(state);
     if (!saved) { showStatus('本机保存未完成，请导出备份后重试', true); return false; }
     state = saved;
@@ -304,6 +314,12 @@
     return state.records[dateKey][taskId] === true;
   }
 
+  function getHabitsForDate(dateKey) {
+    return state.tasks.filter(function(task) {
+      return (!task.createdAt || task.createdAt <= dateKey) && (!task.archivedAt || dateKey <= task.archivedAt);
+    });
+  }
+
   function toggleTask(taskId, dateKey) {
     if (!state.records[dateKey]) state.records[dateKey] = {};
     if (state.records[dateKey][taskId]) {
@@ -316,8 +332,10 @@
   }
 
   function addTask(name) {
+    var before = DailySync.clone(state);
     state.tasks.push({ id: generateId(), name: name, createdAt: getTodayKey() });
-    saveState();
+    if (!saveState()) { state = before; return false; }
+    return true;
   }
 
   function deleteTask(taskId) {
@@ -364,6 +382,7 @@
   }
 
   function addMonthlyTask(name, dateKey, category) {
+    var before = DailySync.clone(state);
     var d = parseDateKey(dateKey);
     var cat = category || '';
     var taskId = generateId();
@@ -375,7 +394,8 @@
       category: cat,
       createdAt: getTodayKey()
     });
-    saveState();
+    if (!saveState()) { state = before; return false; }
+    return true;
   }
 
   // 布置作业：在目标日期创建同名"写作业"任务，截止日为原作业日期
@@ -418,7 +438,10 @@
   function moveMonthlyTask(taskId, direction) {
     var task = state.monthlyTasks.find(function(t) { return t.id === taskId; });
     if (!task) return;
-    var list = getTasksByDate(task.date);
+    var completed = isMonthlyTaskCompleted(task.id, task.monthKey);
+    var list = getTasksByDate(task.date).filter(function(item) {
+      return item.category === task.category && isMonthlyTaskCompleted(item.id, item.monthKey) === completed;
+    });
     var idx = list.findIndex(function(t) { return t.id === taskId; });
     if (idx === -1) return;
     var targetIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -515,6 +538,9 @@
       var aDone = a.completed ? 1 : 0;
       var bDone = b.completed ? 1 : 0;
       if (aDone !== bDone) return aDone - bDone;
+      var aTemporary = a.task.category === TEMPORARY_TAG ? 0 : 1;
+      var bTemporary = b.task.category === TEMPORARY_TAG ? 0 : 1;
+      if (aTemporary !== bTemporary) return aTemporary - bTemporary;
       var aOverdue = (!a.completed && a.dateKey < todayKey) ? 0 : 1;
       var bOverdue = (!b.completed && b.dateKey < todayKey) ? 0 : 1;
       if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -555,6 +581,7 @@
     return t ? t.color : null;
   }
   function getTagRank(name) {
+    if (name === TEMPORARY_TAG) return -1;
     if (!name) return 999;
     var idx = state.tags.findIndex(function(x) { return x.name === name; });
     return idx >= 0 ? idx : 998;
@@ -568,15 +595,18 @@
     return true;
   }
   function removeTag(name) {
+    if (name === TEMPORARY_TAG) return;
     state.tags = state.tags.filter(function(t) { return t.name !== name; });
     state.monthlyTasks.forEach(function(t) { if (t.category === name) t.category = ''; });
     saveState();
   }
   function moveTag(name, dir) {
+    if (name === TEMPORARY_TAG) return;
     var idx = state.tags.findIndex(function(t) { return t.name === name; });
     if (idx < 0) return;
     var ni = idx + dir;
     if (ni < 0 || ni >= state.tags.length) return;
+    if (state.tags[ni].name === TEMPORARY_TAG) return;
     var tmp = state.tags[idx]; state.tags[idx] = state.tags[ni]; state.tags[ni] = tmp;
     saveState();
   }
@@ -621,11 +651,12 @@
       var row = document.createElement('div'); row.className = 'tag-manage-row';
       var dot = document.createElement('span'); dot.className = 'tag-dot'; dot.style.backgroundColor = t.color;
       var nm = document.createElement('span'); nm.className = 'tag-manage-name'; nm.textContent = t.name;
-      var up = document.createElement('button'); up.type='button'; up.className='tag-manage-btn-sm'; up.textContent='↑'; up.title='上移'; up.disabled = i===0;
+      var up = document.createElement('button'); up.type='button'; up.className='tag-manage-btn-sm'; up.textContent='↑'; up.title='上移'; up.disabled = i <= 1;
       up.addEventListener('click', function() { moveTag(t.name,-1); renderTagManagePanel(); renderMonthly(); });
-      var dn = document.createElement('button'); dn.type='button'; dn.className='tag-manage-btn-sm'; dn.textContent='↓'; dn.title='下移'; dn.disabled = i===state.tags.length-1;
+      var dn = document.createElement('button'); dn.type='button'; dn.className='tag-manage-btn-sm'; dn.textContent='↓'; dn.title='下移'; dn.disabled = t.name === TEMPORARY_TAG || i===state.tags.length-1;
       dn.addEventListener('click', function() { moveTag(t.name,1); renderTagManagePanel(); renderMonthly(); });
       var del = document.createElement('button'); del.type='button'; del.className='tag-manage-btn-sm tag-delete'; del.textContent='×'; del.title='删除标签';
+      if (t.name === TEMPORARY_TAG) { del.disabled = true; up.title = dn.title = del.title = '临时任务为固定置顶标签'; }
       del.addEventListener('click', function() {
         if (confirm('删除标签「' + t.name + '」？使用该标签的任务将变为无标签。')) {
           removeTag(t.name);
@@ -664,8 +695,8 @@
     checkbox.className = 'task-checkbox';
     checkbox.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>';
     checkbox.addEventListener('click', function() {
-      if (type === 'daily') { toggleTask(task.id, getTodayKey()); renderToday(); }
-      else { var latest = state.monthlyTasks.find(function(t) { return t.id === task.id; }); if (!latest) return; toggleMonthlyTask(task.id, latest.monthKey); renderMonthly(); if (currentRoute === 'today') renderToday(); }
+      if (type === 'daily') { toggleTask(task.id, getTodayKey()); render(); }
+      else { var latest = state.monthlyTasks.find(function(t) { return t.id === task.id; }); if (!latest) return; toggleMonthlyTask(task.id, latest.monthKey); render(); }
     });
 
     var content = document.createElement('div');
@@ -686,10 +717,10 @@
             else renameMonthlyTask(task.id, val);
           }
           editingState = null;
-          if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+          render();
         } else if (e.key === 'Escape') {
           editingState = null;
-          if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+          render();
         }
       });
       input.addEventListener('blur', function() {
@@ -699,7 +730,7 @@
           else renameMonthlyTask(task.id, val);
         }
         editingState = null;
-        if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+        render();
       });
       content.appendChild(input);
       setTimeout(function() { input.focus(); input.select(); }, 0);
@@ -718,6 +749,14 @@
         }
       }
       // 已过期标签（超过设定日期仍未完成）
+      if (type === 'monthly' && currentRoute === 'today') {
+        var dateBadge = document.createElement('span');
+        dateBadge.className = 'task-badge date-badge';
+        var taskDate = parseDateKey(task.date);
+        dateBadge.textContent = (taskDate.getMonth() + 1) + '/' + taskDate.getDate();
+        dateBadge.title = task.date;
+        content.appendChild(dateBadge);
+      }
       if (type === 'monthly' && !completed && task.date && task.date < getTodayKey()) {
         var overdueBadge = document.createElement('span');
         overdueBadge.className = 'task-badge overdue';
@@ -730,7 +769,7 @@
       name.title = '双击编辑名称';
       name.addEventListener('dblclick', function() {
         editingState = { type: type, id: task.id };
-        if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+        render();
       });
       content.appendChild(name);
     }
@@ -746,8 +785,8 @@
       upBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>';
       upBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (type === 'daily') { moveTask(task.id, 'up'); renderToday(); }
-        else { moveMonthlyTask(task.id, 'up'); if (currentRoute === 'today') renderToday(); else renderMonthly(); }
+        if (type === 'daily') { moveTask(task.id, 'up'); render(); }
+        else { moveMonthlyTask(task.id, 'up'); render(); }
       });
 
       var downBtn = document.createElement('button');
@@ -757,8 +796,8 @@
       downBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>';
       downBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (type === 'daily') { moveTask(task.id, 'down'); renderToday(); }
-        else { moveMonthlyTask(task.id, 'down'); if (currentRoute === 'today') renderToday(); else renderMonthly(); }
+        if (type === 'daily') { moveTask(task.id, 'down'); render(); }
+        else { moveMonthlyTask(task.id, 'down'); render(); }
       });
 
       var editBtn = document.createElement('button');
@@ -768,7 +807,7 @@
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         editingState = { type: type, id: task.id };
-        if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+        render();
       });
 
       // 每月任务且未完成时显示"移动到"按钮
@@ -785,22 +824,22 @@
           } else {
             moveMenuState = { taskId: task.id, monthOffset: 0 };
           }
-          renderMonthly();
+          render();
         });
         actions.appendChild(moveBtn);
       }
 
       var delBtn = document.createElement('button');
       delBtn.className = 'task-delete';
-      delBtn.setAttribute('aria-label', type === 'daily' ? '归档习惯' : '删除任务');
+      delBtn.setAttribute('aria-label', type === 'daily' ? '删除习惯' : '删除任务');
       delBtn.innerHTML = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
       delBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (confirm(type === 'daily' ? '归档习惯「' + task.name + '」？历史打卡会保留。' : '确定删除任务「' + task.name + '」吗？')) {
+        if (confirm(type === 'daily' ? '从每日列表删除习惯「' + task.name + '」？历史打卡会保留。' : '确定删除任务「' + task.name + '」吗？')) {
           if (type === 'daily') deleteTask(task.id);
           else deleteMonthlyTask(task.id);
           if (editingState && editingState.id === task.id) editingState = null;
-          if (type === 'daily') renderToday(); else { renderMonthly(); if (currentRoute === 'today') renderToday(); }
+          render();
         }
       });
 
@@ -828,7 +867,7 @@
             moveMenuState = null;
             assignMenuState = { taskId: task.id, monthOffset: 0 };
           }
-          renderMonthly();
+          render();
         });
         actions.appendChild(assignBtn);
       }
@@ -852,7 +891,7 @@
             viewMonth = new Date(_dp.getFullYear(), _dp.getMonth(), 1);
             assignMenuState = null;
             moveMenuState = null;
-            renderMonthly();
+            render();
           }
         });
         actions.appendChild(deadlineBtn);
@@ -887,7 +926,7 @@
         prevBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           moveMenuState.monthOffset = (moveMenuState.monthOffset || 0) - 1;
-          renderMonthly();
+          render();
         });
 
         var monthLabel = document.createElement('span');
@@ -900,7 +939,7 @@
         nextBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           moveMenuState.monthOffset = (moveMenuState.monthOffset || 0) + 1;
-          renderMonthly();
+          render();
         });
 
         var navDiv = document.createElement('div');
@@ -951,7 +990,7 @@
               moveMenuState = null;
               currentDate = thisDateKey;
               viewMonth = new Date(mY, mM, 1);
-              renderMonthly();
+              render();
             });
             grid.appendChild(dayBtn);
           })(dd);
@@ -982,7 +1021,7 @@
         aPrev.addEventListener('click', function(e) {
           e.stopPropagation();
           assignMenuState.monthOffset = (assignMenuState.monthOffset || 0) - 1;
-          renderMonthly();
+          render();
         });
         var aMLabel = document.createElement('span');
         aMLabel.className = 'move-menu-month';
@@ -992,7 +1031,7 @@
         aNext.addEventListener('click', function(e) {
           e.stopPropagation();
           assignMenuState.monthOffset = (assignMenuState.monthOffset || 0) + 1;
-          renderMonthly();
+          render();
         });
         var aNav = document.createElement('div');
         aNav.className = 'move-menu-nav';
@@ -1030,13 +1069,13 @@
             adayBtn.title = (already ? '已布置 · ' : '布置到 ') + (aM+1) + '月' + dayNum + '日';
             adayBtn.addEventListener('click', function(e) {
               e.stopPropagation();
-              if (already) { assignMenuState = null; renderMonthly(); return; }
+              if (already) { assignMenuState = null; render(); return; }
               assignHomework(task, aKey);
               assignMenuState = null;
               currentDate = aKey;
               var _nd = parseDateKey(aKey);
               viewMonth = new Date(_nd.getFullYear(), _nd.getMonth(), 1);
-              renderMonthly();
+              render();
             });
             aGrid.appendChild(adayBtn);
           })(add);
@@ -1056,31 +1095,34 @@
     return li;
   }
 
-  // ===== 渲染：今日 =====
+  // ===== 渲染：待办 =====
   function renderToday() {
     var today = new Date(), key = getTodayKey();
     document.getElementById('today-date').textContent = today.getFullYear() + '年' + (today.getMonth()+1) + '月' + today.getDate() + '日';
     document.getElementById('today-weekday').textContent = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][today.getDay()];
-    var habits = state.tasks.filter(function(t) { return !t.archivedAt; });
-    var scheduled = getTasksByDate(key);
-    var overdue = state.monthlyTasks.filter(function(t) { return t.date < key && !isMonthlyTaskCompleted(t.id,t.monthKey); }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+    var temporary = state.monthlyTasks.filter(function(t) { return t.category === TEMPORARY_TAG; });
+    var pending = temporary.filter(function(t) { return !isMonthlyTaskCompleted(t.id, t.monthKey); }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+    var scheduled = temporary.filter(function(t) { return t.date === key; });
+    var overdue = state.monthlyTasks.filter(function(t) { return t.category !== TEMPORARY_TAG && t.date < key && !isMonthlyTaskCompleted(t.id,t.monthKey); }).sort(function(a,b) { return a.date.localeCompare(b.date); });
     function fill(id, tasks, type, empty) {
       var list = document.getElementById(id); list.innerHTML = '';
       if (!tasks.length) { var row = document.createElement('li'); row.className = 'quiet-empty'; row.textContent = empty; list.appendChild(row); }
-      tasks.forEach(function(t,i) {
-        var done = type === 'daily' ? isTaskCompleted(t.id,key) : isMonthlyTaskCompleted(t.id,t.monthKey);
+      tasks.forEach(function(t) {
+        var done = isMonthlyTaskCompleted(t.id,t.monthKey);
         var sortable = id !== 'today-overdue-list';
-        list.appendChild(createTaskElement(t,type,done,!sortable || i === 0,!sortable || i === tasks.length - 1));
+        var group = tasks.filter(function(item) { return item.date === t.date; });
+        var index = group.indexOf(t);
+        list.appendChild(createTaskElement(t,type,done,!sortable || index === 0,!sortable || index === group.length - 1));
       });
     }
-    fill('today-scheduled-list',scheduled,'monthly','今天没有安排，可以在日历中添加。');
+    fill('today-scheduled-list',pending,'monthly','暂无临时任务，临时想到的事可以直接添加。');
+    document.getElementById('temporary-task-count').textContent = pending.length + ' 项待办';
     renderPlannedTasks();
-    fill('task-list',habits,'daily','添加一个每天坚持的习惯吧。');
-    fill('today-overdue-list',overdue,'monthly','没有逾期任务。');
-    var completed = habits.filter(function(t) { return isTaskCompleted(t.id,key); }).length + scheduled.filter(function(t) { return isMonthlyTaskCompleted(t.id,t.monthKey); }).length;
-    var total = habits.length + scheduled.length, percent = total ? Math.round(completed / total * 100) : 0;
+    fill('today-overdue-list',overdue,'monthly','没有其他逾期任务。');
+    var completed = scheduled.filter(function(t) { return isMonthlyTaskCompleted(t.id,t.monthKey); }).length;
+    var total = scheduled.length, percent = total ? Math.round(completed / total * 100) : 0;
     document.getElementById('today-progress-fill').style.width = percent + '%';
-    document.getElementById('today-progress-text').textContent = total ? '今日已完成 ' + completed + ' / ' + total + ' 项 · 逾期 ' + overdue.length + ' 项' : '今天还没有任务';
+    document.getElementById('today-progress-text').textContent = '今日临时任务已完成 ' + completed + ' / ' + total + ' 项 · 共 ' + pending.length + ' 项临时任务待处理';
   }
 
   // ===== 渲染：每月 =====
@@ -1233,7 +1275,7 @@
 
     var weekListEl = document.getElementById('week-task-list');
     weekListEl.innerHTML = '';
-    var weekViewTasks = getUpcomingWeekTasks();
+    var weekViewTasks = getUpcomingWeekTasks().filter(function(item) { return !item.completed; });
 
     if (weekViewTasks.length === 0) {
       weekListEl.innerHTML = '<div class="empty-state"><div class="empty-state-text" style="padding:24px 0;">暂无待办任务</div></div>';
@@ -1321,7 +1363,9 @@
       dayTasks.forEach(function(task, index) {
         var completed = isMonthlyTaskCompleted(task.id, monthKey);
         if (completed) dayCompleted++;
-        var li = createTaskElement(task, 'monthly', completed, index === 0, index === dayTasks.length - 1);
+        var group = dayTasks.filter(function(item) { return item.category === task.category && isMonthlyTaskCompleted(item.id, item.monthKey) === completed; });
+        var position = group.indexOf(task);
+        var li = createTaskElement(task, 'monthly', completed, position === 0, position === group.length - 1);
         dayListEl.appendChild(li);
       });
     }
@@ -1333,7 +1377,7 @@
     }
   }
 
-  // ===== 渲染：统计 =====
+  // ===== 渲染：签到（只计算每日习惯，不包含每月任务与计划待办） =====
   function renderStats() {
     var year = statsMonth.getFullYear();
     var month = statsMonth.getMonth();
@@ -1342,6 +1386,8 @@
     var daysInMonth = getDaysInMonth(year, month);
     var today = new Date();
     var todayKey = getTodayKey();
+    document.getElementById('next-month-stats').disabled = formatMonthKey(statsMonth) >= formatMonthKey(today);
+    document.getElementById('history-date-input').max = todayKey;
 
     var dailyCounts = {};
     var totalCompletions = 0;
@@ -1350,7 +1396,7 @@
     for (var day = 1; day <= daysInMonth; day++) {
       var d = new Date(year, month, day);
       var key = formatDateKey(d);
-      var count = state.records[key] ? Object.keys(state.records[key]).length : 0;
+      var count = key <= todayKey ? getHabitsForDate(key).filter(function(task) { return isTaskCompleted(task.id, key); }).length : 0;
       dailyCounts[key] = count;
       totalCompletions += count;
       if (count > 0) activeDays++;
@@ -1365,84 +1411,134 @@
       '<div class="stat-card"><div class="stat-value">' + activeRate + '%</div><div class="stat-label">本月活跃率</div></div>';
 
     renderHeatmap(year, month, daysInMonth, dailyCounts, todayKey);
+    renderHabitChart(year, month, daysInMonth, dailyCounts, todayKey);
     renderHistoryDetail();
     renderTaskStats(year, month, daysInMonth);
+    renderHabitManagement();
+  }
+
+  function renderHabitManagement() {
+    var habits = state.tasks.filter(function(task) { return !task.archivedAt; });
+    var list = document.getElementById('task-list');
+    list.replaceChildren();
+    document.getElementById('habit-manager-count').textContent = habits.length + ' 个习惯';
+    if (!habits.length) {
+      var empty = document.createElement('li');
+      empty.className = 'quiet-empty'; empty.textContent = '添加一个每天坚持的习惯吧。';
+      list.appendChild(empty);
+    }
+    habits.forEach(function(task, index) {
+      var row = createTaskElement(task, 'daily', false, index === 0, index === habits.length - 1);
+      row.querySelector('.task-checkbox').remove();
+      list.appendChild(row);
+    });
+  }
+
+  function selectCheckinDate(dateKey, focusSelector) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || dateKey > getTodayKey()) return;
+    var date = parseDateKey(dateKey);
+    if (isNaN(date.getTime()) || formatDateKey(date) !== dateKey) return;
+    selectedHistoryDate = dateKey;
+    statsMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    renderStats();
+    if (focusSelector) {
+      var control = document.querySelector(focusSelector + '[data-date-key="' + dateKey + '"]');
+      if (control) control.focus({ preventScroll: true });
+    }
+  }
+
+  function changeStatsMonth(offset) {
+    var next = new Date(statsMonth.getFullYear(), statsMonth.getMonth() + offset, 1);
+    if (formatMonthKey(next) > formatMonthKey(new Date())) return;
+    var day = Math.min(parseDateKey(selectedHistoryDate).getDate(), getDaysInMonth(next.getFullYear(), next.getMonth()));
+    var dateKey = formatDateKey(new Date(next.getFullYear(), next.getMonth(), day));
+    selectCheckinDate(dateKey > getTodayKey() ? getTodayKey() : dateKey);
+  }
+
+  function renderHabitChart(year, month, daysInMonth, dailyCounts, todayKey) {
+    var chart = document.getElementById('habit-chart');
+    var detail = document.getElementById('habit-chart-detail');
+    chart.replaceChildren();
+    var maxCount = Math.max.apply(null, Object.keys(dailyCounts).map(function(key) { return dailyCounts[key]; }).concat([0]));
+    var ceiling = Math.max(4, Math.ceil(maxCount / 4) * 4);
+    var plot = document.createElement('div');
+    plot.className = 'habit-chart-plot';
+    [0, ceiling / 2, ceiling].forEach(function(value) {
+      var line = document.createElement('div');
+      line.className = 'habit-chart-gridline';
+      line.style.bottom = (value / ceiling * 100) + '%';
+      var label = document.createElement('span');
+      label.textContent = value;
+      line.appendChild(label);
+      plot.appendChild(line);
+    });
+    function describe(key) {
+      var date = parseDateKey(key);
+      detail.textContent = (date.getMonth() + 1) + '月' + date.getDate() + '日 · 完成 ' + (dailyCounts[key] || 0) + ' 项每日习惯';
+    }
+    var bars = document.createElement('div');
+    bars.className = 'habit-chart-bars';
+    bars.style.setProperty('--chart-days', daysInMonth);
+    for (var day = 1; day <= daysInMonth; day++) {
+      var key = formatDateKey(new Date(year, month, day));
+      var count = dailyCounts[key] || 0;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'habit-chart-day' + (key === selectedHistoryDate ? ' selected' : '');
+      button.dataset.dateKey = key;
+      button.dataset.count = count;
+      button.disabled = key > todayKey;
+      button.setAttribute('aria-label', key + (button.disabled ? '：未来日期' : '：完成 ' + count + ' 项每日习惯'));
+      button.setAttribute('aria-pressed', String(key === selectedHistoryDate));
+      button.title = button.getAttribute('aria-label');
+      var bar = document.createElement('span');
+      bar.className = 'habit-chart-bar';
+      bar.style.height = (count / ceiling * 100) + '%';
+      button.appendChild(bar);
+      button.addEventListener('mouseenter', function() { if (!this.disabled) describe(this.dataset.dateKey); });
+      button.addEventListener('focus', function() { describe(this.dataset.dateKey); });
+      button.addEventListener('mouseleave', function() { describe(selectedHistoryDate); });
+      button.addEventListener('blur', function() { describe(selectedHistoryDate); });
+      button.addEventListener('click', function(event) { selectCheckinDate(this.dataset.dateKey, event.detail === 0 ? '.habit-chart-day' : null); });
+      bars.appendChild(button);
+    }
+    plot.appendChild(bars);
+    chart.appendChild(plot);
+    var axis = document.createElement('div');
+    axis.className = 'habit-chart-axis';
+    [1, 5, 10, 15, 20, 25, daysInMonth].forEach(function(day) {
+      var label = document.createElement('span');
+      label.textContent = (month + 1) + '/' + day;
+      label.style.left = ((day - 1) / (daysInMonth - 1) * 100) + '%';
+      if (day === 5 || day === 15 || day === 25) label.className = 'chart-axis-secondary';
+      axis.appendChild(label);
+    });
+    chart.appendChild(axis);
+    describe(selectedHistoryDate);
   }
 
   function renderHeatmap(year, month, daysInMonth, dailyCounts, todayKey) {
-    var weekdaysEl = document.getElementById('heatmap-weekdays');
-    var gridEl = document.getElementById('heatmap-grid');
-    weekdaysEl.innerHTML = '';
-    gridEl.innerHTML = '';
-
-    weekdaysEl.innerHTML = '<div class="heatmap-weekday-label empty"></div>';
-    ['一', '二', '三', '四', '五', '六', '日'].forEach(function(w) {
-      var cell = document.createElement('div');
-      cell.className = 'heatmap-weekday-label';
-      cell.textContent = w;
-      weekdaysEl.appendChild(cell);
-    });
-
-    var maxCount = 0;
-    Object.keys(dailyCounts).forEach(function(k) {
-      if (dailyCounts[k] > maxCount) maxCount = dailyCounts[k];
-    });
-
-    var firstDay = new Date(year, month, 1).getDay();
-    var firstDayOffset = firstDay === 0 ? 6 : firstDay - 1;
-    var totalCells = firstDayOffset + daysInMonth;
-    var totalWeeks = Math.ceil(totalCells / 7);
-    var weekLabels = ['第1周', '第2周', '第3周', '第4周', '第5周', '第6周'];
-
-    var cellIndex = 0;
-    for (var week = 0; week < totalWeeks; week++) {
-      var weekLabel = document.createElement('div');
-      weekLabel.className = 'heatmap-week-label';
-      weekLabel.textContent = weekLabels[week] || '';
-      gridEl.appendChild(weekLabel);
-
-      for (var col = 0; col < 7; col++) {
-        var cell = document.createElement('div');
-        cell.className = 'heatmap-cell';
-        var actualDay = cellIndex - firstDayOffset + 1;
-
-        if (actualDay >= 1 && actualDay <= daysInMonth) {
-          var d = new Date(year, month, actualDay);
-          var key = formatDateKey(d);
-          var count = dailyCounts[key] || 0;
-
-          if (count > 0) {
-            cell.classList.add('has-data');
-            var level = getHeatLevel(count, maxCount);
-            if (level > 0) cell.classList.add('level-' + level);
-            cell.title = year + '年' + (month + 1) + '月' + actualDay + '日：完成 ' + count + ' 项';
-          } else {
-            cell.title = year + '年' + (month + 1) + '月' + actualDay + '日：未完成';
-          }
-          if (key === todayKey) cell.classList.add('today');
-
-          var today = new Date();
-          var isFuture = year > today.getFullYear() || (year === today.getFullYear() && month > today.getMonth()) ||
-              (year === today.getFullYear() && month === today.getMonth() && actualDay > today.getDate());
-          if (isFuture) {
-            cell.classList.add('future');
-            cell.title = '';
-          } else {
-            cell.style.cursor = 'pointer';
-            cell.dataset.dateKey = key;
-            cell.addEventListener('click', function() {
-              selectedHistoryDate = this.dataset.dateKey;
-              renderHistoryDetail();
-              document.getElementById('history-date-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-          }
-        } else {
-          cell.style.visibility = 'hidden';
-        }
-
-        gridEl.appendChild(cell);
-        cellIndex++;
-      }
+    var grid = document.getElementById('heatmap-grid');
+    grid.replaceChildren();
+    document.getElementById('heatmap-range').textContent = '1日 — ' + daysInMonth + '日';
+    var maxCount = Math.max.apply(null, Object.keys(dailyCounts).map(function(key) { return dailyCounts[key]; }).concat([0]));
+    for (var day = 1; day <= daysInMonth; day++) {
+      var key = formatDateKey(new Date(year, month, day));
+      var count = dailyCounts[key] || 0;
+      var cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'heatmap-cell';
+      cell.dataset.dateKey = key;
+      if (count > 0) cell.classList.add('has-data', 'level-' + getHeatLevel(count, maxCount));
+      if (key === todayKey) cell.classList.add('today');
+      if (key === selectedHistoryDate) cell.classList.add('selected');
+      cell.disabled = key > todayKey;
+      if (cell.disabled) cell.classList.add('future');
+      cell.title = key + (cell.disabled ? '：未来日期' : '：完成 ' + count + ' 项每日习惯');
+      cell.setAttribute('aria-label', cell.title);
+      cell.setAttribute('aria-pressed', String(key === selectedHistoryDate));
+      cell.addEventListener('click', function(event) { selectCheckinDate(this.dataset.dateKey, event.detail === 0 ? '.heatmap-cell' : null); });
+      grid.appendChild(cell);
     }
   }
 
@@ -1466,12 +1562,12 @@
     var listEl = document.getElementById('history-task-list');
     listEl.innerHTML = '';
 
-    var historyTasks = state.tasks.filter(function(t) { return (!t.createdAt || t.createdAt <= dateKey) && (!t.archivedAt || dateKey <= t.archivedAt); });
+    var historyTasks = getHabitsForDate(dateKey).filter(function(task) { return dateKey !== getTodayKey() || !task.archivedAt; });
     var total = historyTasks.length;
 
     if (total === 0) {
-      summaryEl.innerHTML = '还没有每日任务';
-      listEl.innerHTML = '<div class="empty-state"><div class="empty-state-text">还没有每日任务，去「今日」页面添加吧</div></div>';
+      summaryEl.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日 · 没有每日习惯';
+      listEl.innerHTML = '<li class="quiet-empty">这一天没有每日习惯，可在下方「管理每日习惯」中添加。</li>';
       return;
     }
 
@@ -1485,22 +1581,30 @@
       var li = document.createElement('li');
       li.className = 'task-item' + (completed ? ' completed' : '');
 
-      var checkbox = document.createElement('div');
+      var checkbox = document.createElement('button');
+      checkbox.type = 'button';
       checkbox.className = 'task-checkbox';
+      checkbox.setAttribute('role', 'checkbox');
+      checkbox.setAttribute('aria-checked', String(completed));
+      checkbox.setAttribute('aria-label', task.name);
+      checkbox.dataset.taskId = task.id;
       checkbox.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
       if (isFutureDate) {
         // 未来日期不可标记完成
-        checkbox.style.cursor = 'not-allowed';
-        checkbox.style.opacity = '0.35';
+        checkbox.disabled = true;
         checkbox.title = '未来日期无法标记';
       } else {
         // 点击切换该任务在选定日期的完成状态（可补录历史）
         checkbox.style.cursor = 'pointer';
         checkbox.title = completed ? '点击取消完成' : '点击标记完成';
-        checkbox.addEventListener('click', function() {
+        checkbox.addEventListener('click', function(event) {
           toggleTask(task.id, dateKey);
           renderStats();
+          if (event.detail === 0) {
+            var replacement = Array.from(document.querySelectorAll('#history-task-list .task-checkbox')).find(function(button) { return button.dataset.taskId === task.id; });
+            if (replacement) replacement.focus({ preventScroll: true });
+          }
         });
       }
 
@@ -1573,6 +1677,12 @@
 
   // ===== 事件绑定 =====
   function initEvents() {
+    document.getElementById('add-temporary-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var input = document.getElementById('add-temporary-input');
+      var name = input.value.trim();
+      if (name && addMonthlyTask(name, getTodayKey(), TEMPORARY_TAG)) { input.value = ''; renderToday(); input.focus(); }
+    });
     document.getElementById('add-planned-form').addEventListener('submit', function(e) {
       e.preventDefault();
       var input = document.getElementById('add-planned-input');
@@ -1611,15 +1721,14 @@
       e.preventDefault();
       var input = document.getElementById('add-task-input');
       var name = input.value.trim();
-      if (name) { addTask(name); input.value = ''; renderToday(); }
+      if (name && addTask(name)) { input.value = ''; selectCheckinDate(getTodayKey()); input.focus(); }
     });
 
     document.getElementById('add-monthly-form').addEventListener('submit', function(e) {
       e.preventDefault();
       var input = document.getElementById('add-monthly-input');
       var name = input.value.trim();
-      if (name) {
-        addMonthlyTask(name, currentDate, selectedTag);
+      if (name && addMonthlyTask(name, currentDate, selectedTag)) {
         input.value = '';
         selectedTag = '';
         updateTagSelectorBtn();
@@ -1669,41 +1778,28 @@
       renderMonthly();
     });
 
-    // 统计翻页
+    // 签到翻页，图表、热力图与右侧日常任务始终对应同一月份
     document.getElementById('prev-month-stats').addEventListener('click', function() {
-      statsMonth = new Date(statsMonth.getFullYear(), statsMonth.getMonth() - 1, 1);
-      renderStats();
+      changeStatsMonth(-1);
     });
     document.getElementById('next-month-stats').addEventListener('click', function() {
-      var now = new Date();
-      var next = new Date(statsMonth.getFullYear(), statsMonth.getMonth() + 1, 1);
-      if (next.getFullYear() < now.getFullYear() ||
-          (next.getFullYear() === now.getFullYear() && next.getMonth() <= now.getMonth())) {
-        statsMonth = next;
-        renderStats();
-      }
+      changeStatsMonth(1);
     });
 
     // 历史日详情
     document.getElementById('history-date-input').addEventListener('change', function() {
-      if (this.value) {
-        selectedHistoryDate = this.value;
-      } else {
-        // 点了日期框自带的“清除”按钮：回退到今天，避免框空而列表仍停在旧日期
-        selectedHistoryDate = getTodayKey();
-      }
-      renderHistoryDetail();
+      selectCheckinDate(this.value || getTodayKey());
+      this.value = selectedHistoryDate;
     });
     document.getElementById('history-today-btn').addEventListener('click', function() {
-      selectedHistoryDate = getTodayKey();
-      renderHistoryDetail();
+      selectCheckinDate(getTodayKey());
     });
 
     // 点击外部关闭移动菜单
     document.addEventListener('click', function(e) {
       if (moveMenuState && !e.target.closest('[data-move-menu]') && !e.target.closest('[data-move-btn]')) {
         moveMenuState = null;
-        if (currentRoute === 'monthly') renderMonthly();
+        if (currentRoute === 'monthly' || currentRoute === 'today') render();
       }
     });
 
@@ -1800,16 +1896,18 @@
     apply: function(data) {
       if (!DailySync.validate(data)) throw Error('数据格式不正确');
       state = DailySync.clone(data); editingState = null; moveMenuState = null; assignMenuState = null;
+      ensureTemporaryTag();
       undoSnapshot = null; document.getElementById('undo-btn').hidden = true;
       render();
     },
     reset: function() {
-      state = DailySync.empty(); editingState = null; moveMenuState = null; assignMenuState = null;
+      state = DailySync.empty(); ensureTemporaryTag(); editingState = null; moveMenuState = null; assignMenuState = null;
       selectedTag = ''; updateTagSelectorBtn(); currentDate = getTodayKey(); selectedHistoryDate = getTodayKey();
+      statsMonth = new Date(); statsMonth.setDate(1);
       undoSnapshot = null; document.getElementById('undo-btn').hidden = true;
       document.querySelectorAll('#daily-app dialog[open]').forEach(function(d) { d.close(); });
       document.querySelectorAll('#daily-app input').forEach(function(el) { el.value = ''; });
-      document.querySelectorAll('#daily-app .task-list, #stats-overview, #task-stats-list, #history-summary, #heatmap-grid').forEach(function(el) { el.replaceChildren(); });
+      document.querySelectorAll('#daily-app .task-list, #stats-overview, #task-stats-list, #history-summary, #heatmap-grid, #habit-chart, #habit-chart-detail').forEach(function(el) { el.replaceChildren(); });
       ['tag-dropdown', 'tag-manage-panel'].forEach(function(id) { var el = document.getElementById(id); el.replaceChildren(); el.style.display = 'none'; });
       document.getElementById('copy-task-name').textContent = '';
       document.getElementById('data-panel').style.display = 'none';

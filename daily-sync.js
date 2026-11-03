@@ -16,7 +16,7 @@
     Number.isFinite(Date.parse(x)) && new Date(x + 'T00:00:00Z').toISOString().slice(0, 10) === x;
   function empty() {
     return {tasks: [], records: {}, monthlyTasks: [], monthlyRecords: {}, plannedTasks: [], tags: [
-      {name: '作业', color: '#1E8449'}, {name: '补课', color: '#2980B9'},
+      {name: '临时任务', color: '#8E44AD'}, {name: '作业', color: '#1E8449'}, {name: '补课', color: '#2980B9'},
       {name: '写作业', color: '#95A5A6'}, {name: '考试', color: '#C0392B'}
     ]};
   }
