@@ -562,7 +562,7 @@
     copySource = {id: task.id, type: type};
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('copy-task-name').textContent = task.name;
-    copyDates = [formatDateKey(tomorrow)];
+    copyDates = [];
     copyMonth = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1);
     document.getElementById('copy-note').textContent = type === 'daily'
       ? '将此习惯复制为所选日期的单次任务，副本为未完成。'
@@ -570,7 +570,7 @@
     document.getElementById('copy-error').textContent = '';
     renderCopyCalendar();
     document.getElementById('copy-dialog').showModal();
-    document.querySelector('#copy-calendar [aria-pressed="true"]').focus();
+    document.querySelector('#copy-calendar [data-date="' + formatDateKey(tomorrow) + '"]').focus();
   }
 
   function getTasksByDate(dateKey) {
