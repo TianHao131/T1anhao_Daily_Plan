@@ -1311,8 +1311,10 @@
           if (dateKey === todayKey) cell.classList.add('today');
           if (dateKey === currentDate) cell.classList.add('selected');
 
-          var count = getTaskCountByDate(dateKey);
           var dayTasks = getTasksByDate(dateKey);
+          var count = dayTasks.length;
+          var dotTasks = dayTasks.filter(function(task) { return task.category !== TEMPORARY_TAG; });
+          dotTasks.sort(function(a, b) { return getTagRank(a.category) - getTagRank(b.category); });
           // 作业
           var homeworkTasks = dayTasks.filter(function(t) { return t.category === '作业'; });
           var hasHomework = homeworkTasks.length > 0;
@@ -1330,21 +1332,47 @@
           if (hasExam) cell.classList.add(examAllDone ? 'exam-done' : 'exam-pending');
           if (hasHomework && hasExam) cell.classList.add('split-task-colors');
 
-          cell.innerHTML =
-            '<span class="calendar-day-num-mini">' + d.getDate() + '</span>' +
-            (count > 0 ? '<span class="calendar-dot-mini"></span>' : '');
+          var dayNumber = document.createElement('span');
+          dayNumber.className = 'calendar-day-num-mini'; dayNumber.textContent = d.getDate();
+          cell.appendChild(dayNumber);
+          var dotSummary = [];
+          if (dotTasks.length) {
+            var dots = document.createElement('span'); dots.className = 'calendar-task-dots';
+            dots.setAttribute('aria-hidden', 'true');
+            dotTasks.forEach(function(task) {
+              var label = task.category || '无标签';
+              var dot = document.createElement('span'); dot.className = 'calendar-dot-mini';
+              dot.style.backgroundColor = getTagColor(task.category) || '#95A5A6';
+              dots.appendChild(dot);
+              var group = dotSummary.find(function(item) { return item.name === label; });
+              if (group) group.count++; else dotSummary.push({name: label, count: 1});
+            });
+            cell.appendChild(dots);
+          }
 
           var titleText = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + weekdays[d.getDay()];
           if (hasExam) titleText += examAllDone ? ' · 考试已完成' : ' · 有考试待完成';
           if (hasHomework) titleText += homeworkAllDone ? ' · 作业已完成' : ' · 有作业待完成';
           if (count > 0) titleText += ' · ' + count + '个任务';
+          if (dotSummary.length) titleText += ' · 圆点：' + dotSummary.map(function(item) { return item.name + ' ' + item.count + '项'; }).join('、');
+          if (dayTasks.some(function(task) { return task.category === TEMPORARY_TAG; })) titleText += ' · 临时任务不显示圆点';
           cell.title = titleText;
+          cell.setAttribute('role', 'button'); cell.tabIndex = 0;
+          cell.setAttribute('aria-label', titleText);
+          cell.setAttribute('aria-pressed', String(dateKey === currentDate));
 
           cell.dataset.dateKey = dateKey;
           cell.addEventListener('click', function() {
             currentDate = this.dataset.dateKey;
             moveMenuState = null;
             renderMonthly();
+          });
+          cell.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault(); this.click();
+              var selected = calEl.querySelector('.calendar-cell-mini.selected');
+              if (selected) selected.focus({preventScroll: true});
+            }
           });
 
           calEl.appendChild(cell);
@@ -1894,9 +1922,16 @@
     // 日历上下翻周 + 标题点击回今天
     function scrollCalendarByWeek(dir) {
       var cal = document.getElementById('calendar-with-weeks');
-      var cell = cal.querySelector('.calendar-cell-mini');
-      var rowH = cell ? cell.offsetHeight + 4 : 56;
-      cal.scrollBy({ top: dir * rowH, behavior: 'smooth' });
+      var cells = cal.querySelectorAll('.calendar-cell-mini');
+      if (!cells.length) return;
+      var header = cal.querySelector('.calendar-weekday-mini').offsetHeight;
+      var top = cal.getBoundingClientRect().top;
+      var row = 0;
+      for (var i = 0; i < cells.length; i += 7) {
+        if (cells[i].getBoundingClientRect().bottom > top + header + 1) { row = i; break; }
+      }
+      var target = cells[Math.max(0, Math.min(cells.length - 7, row + dir * 7))];
+      cal.scrollTo({top: cal.scrollTop + target.getBoundingClientRect().top - top - header, behavior: 'smooth'});
     }
     document.getElementById('prev-month-btn').addEventListener('click', function() { scrollCalendarByWeek(-1); });
     document.getElementById('next-month-btn').addEventListener('click', function() { scrollCalendarByWeek(1); });

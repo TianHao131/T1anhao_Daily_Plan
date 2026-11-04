@@ -307,7 +307,7 @@ body {
 /* 带周标签的日历 */
 .calendar-with-weeks {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   max-height: 480px;
   overflow-y: auto;
@@ -336,7 +336,9 @@ body {
   font-family: var(--font-serif);
 }
 .calendar-cell-mini {
-  aspect-ratio: 1;
+  min-width: 0;
+  min-height: clamp(56px, 5.4vw, 86px);
+  padding: 6px 2px;
   border: 1px solid var(--border-light);
   background: var(--card);
   border-radius: 6px;
@@ -345,7 +347,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   transition: all 0.12s ease;
   position: relative;
 }
@@ -408,11 +410,28 @@ body {
 .calendar-dot-mini {
   width: 5px;
   height: 5px;
+  flex: 0 0 5px;
   border-radius: 50%;
-  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.85);
 }
-.calendar-cell-mini.selected .calendar-dot-mini {
-  background: #fff;
+.calendar-task-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  width: calc(100% - 6px);
+  max-width: 37px;
+  flex: 0 0 auto;
+  padding: 2px;
+  box-sizing: content-box;
+  border-radius: 4px;
+}
+.calendar-cell-mini.selected .calendar-task-dots {
+  background: rgba(255,255,255,.9);
+}
+.calendar-cell-mini:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* 周任务列表中的每日任务进度 */
@@ -779,7 +798,6 @@ button:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
 .calendar-cell-mini.split-task-colors.homework-done { --homework-half: #F0FAF0; --homework-border: #9AC99A; }
 .calendar-cell-mini.split-task-colors.exam-done { --exam-half: #F0F5FF; --exam-border: #A0B8E0; }
 .calendar-cell-mini.split-task-colors:is(.homework-pending, .homework-done) .calendar-day-num-mini { color: var(--text-primary); font-weight: 600; }
-.calendar-cell-mini.split-task-colors .calendar-dot-mini { background: var(--accent); }
 .calendar-cell-mini.split-task-colors.today { border-color: transparent; }
 .calendar-cell-mini.split-task-colors.selected { border-color: transparent; outline: 2px solid var(--accent); outline-offset: 2px; }
 .calendar-color-legend {display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;color:var(--text-secondary);font-size:.75rem;}
