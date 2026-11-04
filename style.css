@@ -723,6 +723,46 @@ button:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
 .copy-error {color:var(--danger);font-size:.85rem;margin-top:10px;}
 .copy-dialog-actions {display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
 .copy-dialog-actions .add-task-btn {width:auto;}
+#copy-dialog {width:min(480px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow-y:auto;padding:24px;box-sizing:border-box;}
+#copy-dialog .copy-note {margin-bottom:16px;}
+.copy-date-heading,.copy-selection-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.82rem;}
+.copy-date-heading {margin-bottom:10px;flex-wrap:wrap;}
+.copy-shortcuts {display:flex;gap:6px;}
+.copy-shortcuts button,.copy-selection-heading button {font:inherit;border:0;background:var(--accent-light);color:var(--accent-hover);padding:5px 9px;border-radius:5px;cursor:pointer;}
+.copy-calendar-panel {padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;}
+.copy-calendar-toolbar {display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+#copy-month-label {font-weight:600;font-size:.95rem;}
+.copy-calendar-toolbar button {width:34px;height:34px;font:inherit;font-size:1.4rem;background:var(--card);border:1px solid var(--border);border-radius:7px;color:var(--accent);cursor:pointer;line-height:1;}
+.copy-weekdays,.copy-calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;}
+.copy-weekdays {font-size:.75rem;color:var(--text-secondary);margin-bottom:6px;}
+.copy-calendar-day {position:relative;min-height:38px;border:1px solid transparent;border-radius:7px;font:inherit;font-size:.88rem;color:var(--text-primary);background:var(--card);cursor:pointer;}
+.copy-calendar-day:hover {border-color:var(--accent);background:var(--accent-light);}
+.copy-calendar-day[aria-pressed="true"] {background:var(--accent);color:#fff;font-weight:600;border-color:var(--accent);}
+.copy-calendar-day.is-today::after {content:'';position:absolute;bottom:3px;left:calc(50% - 2px);width:4px;height:4px;background:var(--accent);border-radius:50%;}
+.copy-calendar-day.is-today[aria-pressed="true"]::after {background:#fff;}
+#copy-dialog button:focus-visible,.task-tag-select:focus-visible {outline:2px solid var(--accent-hover);outline-offset:2px;}
+.copy-selection-heading {margin:14px 0 8px;}
+.copy-selection-heading button {background:transparent;padding:4px;}
+.copy-selected-dates {display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px;max-height:100px;overflow-y:auto;padding:3px;font-size:.8rem;color:var(--text-secondary);}
+.copy-date-chip {font:inherit;color:var(--accent-hover);background:var(--accent-light);border:1px solid var(--border);border-radius:6px;padding:5px 8px;cursor:pointer;}
+.copy-result-note {font-size:.75rem;color:var(--text-secondary);margin-top:10px;}
+#copy-submit:disabled {opacity:.45;cursor:not-allowed;}
+.monthly-edit-form {display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,150px);gap:10px 12px;align-items:end;}
+.monthly-edit-form label {display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.78rem;color:var(--text-secondary);}
+.monthly-edit-form .task-name-input,.task-tag-select {width:100%;min-width:0;height:38px;box-sizing:border-box;font:inherit;font-size:.9rem;color:var(--text-primary);border:1px solid var(--border);border-radius:6px;background:var(--card);padding:6px 9px;}
+.monthly-edit-actions {grid-column:1/-1;display:flex;gap:8px;}
+.monthly-edit-actions .edit-save {background:var(--accent);color:white;border-color:var(--accent);}
+.monthly-edit-form .copy-error {grid-column:1/-1;margin:0;}
+.task-item:focus-within .task-actions {opacity:1;}
+@media (max-width:600px) {
+  #copy-dialog {padding:18px;}
+  .monthly-edit-form {grid-template-columns:minmax(0,1fr);}
+  .copy-calendar-panel {padding:9px;}
+  .copy-calendar-grid,.copy-weekdays {gap:4px;}
+  .copy-calendar-day {min-height:36px;}
+  #copy-dialog .copy-dialog-actions {gap:8px;}
+  #copy-dialog .copy-dialog-actions button {padding:10px 12px;}
+}
 @media (max-width:600px) {.task-item {flex-wrap:wrap;}.task-actions {width:100%;}}
 
 /* 同日作业 + 考试：两个半区独立表示完成状态，选中时保留颜色。 */

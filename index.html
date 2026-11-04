@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="daily-ui-version" content="2">
+<meta name="daily-ui-version" content="3">
 <title>每日任务</title>
 <link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
-<link rel="stylesheet" href="style.css?v=2ff56585e0e5">
+<link rel="stylesheet" href="style.css?v=7e69f9c3b164">
 <link rel="stylesheet" href="cloud.css?v=cea0d1df8b51">
 <link rel="stylesheet" href="account.css?v=56ca3b44415b"><script id="account-recovery-redirect">
 (function(){var h=new URLSearchParams(location.hash.slice(1)),q=new URLSearchParams(location.search);
@@ -240,12 +240,27 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
     <h2 id="copy-title">复制任务</h2>
     <p id="copy-task-name" class="copy-name"></p>
     <p id="copy-note" class="copy-note"></p>
-    <label for="copy-date">目标日期</label>
-    <input id="copy-date" class="history-date-input" type="date" required min="0001-01-01" max="9999-12-31">
+    <div class="copy-date-heading"><span>目标日期 · 可多选</span><div class="copy-shortcuts">
+      <button type="button" data-copy-offset="0">今天</button>
+      <button type="button" data-copy-offset="1">明天</button>
+      <button type="button" data-copy-offset="7">一周后</button>
+    </div></div>
+    <div class="copy-calendar-panel">
+      <div class="copy-calendar-toolbar">
+        <button id="copy-prev-month" type="button" aria-label="复制日历上个月">‹</button>
+        <span id="copy-month-label" aria-live="polite"></span>
+        <button id="copy-next-month" type="button" aria-label="复制日历下个月">›</button>
+      </div>
+      <div class="copy-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+      <div id="copy-calendar" class="copy-calendar-grid" role="group" aria-labelledby="copy-month-label"></div>
+    </div>
+    <div class="copy-selection-heading"><span id="copy-selected-count" role="status" aria-live="polite"></span><button id="copy-clear-dates" type="button">清空选择</button></div>
+    <div id="copy-selected-dates" class="copy-selected-dates" role="group" aria-label="已选日期"></div>
+    <p class="copy-result-note">每个日期生成一份，复制后查看最早所选日期。</p>
     <p id="copy-error" class="copy-error" role="alert"></p>
     <div class="copy-dialog-actions">
       <button id="copy-cancel" type="button" class="history-today-btn">取消</button>
-      <button type="submit" class="add-task-btn">复制并查看</button>
+      <button id="copy-submit" type="submit" class="add-task-btn">复制并查看</button>
     </div>
   </form>
 </dialog>
@@ -264,7 +279,7 @@ location.replace(new URL('account.html',location.href).pathname+location.search+
 <script src="supabase-2.118.0.js?v=ee3be8de192b"></script>
 <script src="cloud-config.js?v=daa825e32416"></script>
 <script src="daily-sync.js?v=605367e14582"></script>
-<script src="app.js?v=711e95568b6a"></script>
+<script src="app.js?v=078c9d4f620b"></script>
 <script src="cloud-ui.js?v=6bb440463047"></script>
 
 </body>

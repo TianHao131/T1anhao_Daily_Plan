@@ -434,9 +434,15 @@
     saveState();
   }
 
-  function renameMonthlyTask(taskId, newName) {
+  function renameMonthlyTask(taskId, newName, category) {
     var task = state.monthlyTasks.find(function(t) { return t.id === taskId; });
-    if (task) { task.name = newName; saveState(); }
+    if (!task || !newName.trim() || newName.trim().length > 50) return false;
+    if (category && !state.tags.some(function(tag) { return tag.name === category; }) && category !== task.category) return false;
+    var before = DailySync.clone(state);
+    task.name = newName.trim();
+    if (category !== undefined) task.category = category;
+    if (!saveState()) { state = before; return false; }
+    return true;
   }
 
   function moveMonthlyTask(taskId, direction) {
@@ -475,34 +481,96 @@
   }
 
   // 复制生成独立的单次任务，不携带完成记录。
-  function copyTaskToDate(taskId, type, dateKey) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || formatDateKey(parseDateKey(dateKey)) !== dateKey) return false;
+  function copyTaskToDates(taskId, type, dates) {
+    var uniqueDates = Array.from(new Set(dates)).sort();
+    if (!uniqueDates.length || uniqueDates.some(function(key) {
+      return !/^\d{4}-\d{2}-\d{2}$/.test(key) || key < '1000-01-01' || formatDateKey(parseDateKey(key)) !== key;
+    })) return false;
     var source = (type === 'daily' ? state.tasks : state.monthlyTasks).find(function(t) { return t.id === taskId; });
     if (!source) return false;
-    var copy = {
-      id: generateId(), name: source.name, date: dateKey,
-      monthKey: dateKey.slice(0, 7), category: source.category || '', createdAt: getTodayKey()
-    };
-    state.monthlyTasks.push(copy);
-    if (!saveState()) {
-      state.monthlyTasks = state.monthlyTasks.filter(function(t) { return t.id !== copy.id; });
-      return false;
-    }
-    return copy;
+    var before = DailySync.clone(state);
+    var copies = uniqueDates.map(function(dateKey) {
+      return {id: generateId(), name: source.name, date: dateKey,
+        monthKey: dateKey.slice(0, 7), category: source.category || '', createdAt: getTodayKey()};
+    });
+    state.monthlyTasks = state.monthlyTasks.concat(copies);
+    if (!saveState()) { state = before; return false; }
+    return copies;
   }
 
   var copySource = null;
+  var copyDates = [];
+  var copyMonth = new Date();
+  function renderCopyCalendar(focusDate) {
+    var year = copyMonth.getFullYear(), month = copyMonth.getMonth();
+    var label = year + '年' + (month + 1) + '月';
+    document.getElementById('copy-month-label').textContent = label;
+    document.getElementById('copy-prev-month').disabled = year === 1000 && month === 0;
+    document.getElementById('copy-next-month').disabled = year === 9999 && month === 11;
+    var grid = document.getElementById('copy-calendar');
+    grid.replaceChildren();
+    var firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
+    for (var empty = 0; empty < firstDay; empty++) {
+      var spacer = document.createElement('span'); spacer.setAttribute('aria-hidden', 'true'); grid.appendChild(spacer);
+    }
+    for (var day = 1; day <= getDaysInMonth(year, month); day++) {
+      (function(dayNumber) {
+        var date = new Date(year, month, dayNumber), key = formatDateKey(date);
+        var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'copy-calendar-day';
+        btn.dataset.date = key; btn.textContent = dayNumber;
+        btn.setAttribute('aria-label', label + dayNumber + '日 星期' + WEEKDAY_LABELS[(date.getDay() + 6) % 7]);
+        btn.setAttribute('aria-pressed', String(copyDates.indexOf(key) !== -1));
+        if (key === getTodayKey()) { btn.classList.add('is-today'); btn.setAttribute('aria-current', 'date'); }
+        btn.addEventListener('click', function() {
+          var index = copyDates.indexOf(key);
+          if (index < 0) copyDates.push(key); else copyDates.splice(index, 1);
+          document.getElementById('copy-error').textContent = '';
+          renderCopyCalendar(key);
+        });
+        btn.addEventListener('keydown', function(e) {
+          var offset = {ArrowLeft:-1, ArrowRight:1, ArrowUp:-7, ArrowDown:7}[e.key];
+          if (!offset) return;
+          e.preventDefault();
+          var next = new Date(year, month, dayNumber + offset);
+          if (next.getFullYear() < 1000 || next.getFullYear() > 9999) return;
+          copyMonth = new Date(next.getFullYear(), next.getMonth(), 1);
+          renderCopyCalendar(formatDateKey(next));
+        });
+        grid.appendChild(btn);
+      })(day);
+    }
+    var selected = document.getElementById('copy-selected-dates'); selected.replaceChildren();
+    copyDates.sort().forEach(function(key) {
+      var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'copy-date-chip';
+      chip.textContent = key + ' ×'; chip.setAttribute('aria-label', '移除日期 ' + key);
+      chip.addEventListener('click', function() {
+        copyDates = copyDates.filter(function(date) { return date !== key; }); renderCopyCalendar();
+        document.getElementById('copy-clear-dates').focus();
+      });
+      selected.appendChild(chip);
+    });
+    if (!copyDates.length) selected.textContent = '点击日历选择日期，可以跨月多选。';
+    document.getElementById('copy-selected-count').textContent = '已选 ' + copyDates.length + ' 个日期';
+    document.getElementById('copy-submit').disabled = !copyDates.length;
+    document.getElementById('copy-submit').textContent = copyDates.length > 1 ? '复制到 ' + copyDates.length + ' 个日期' : '复制并查看';
+    if (focusDate) {
+      var focus = grid.querySelector('[data-date="' + focusDate + '"]'); if (focus) focus.focus();
+    }
+  }
+
   function openCopyDialog(task, type) {
     copySource = {id: task.id, type: type};
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('copy-task-name').textContent = task.name;
-    document.getElementById('copy-date').value = formatDateKey(tomorrow);
+    copyDates = [formatDateKey(tomorrow)];
+    copyMonth = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1);
     document.getElementById('copy-note').textContent = type === 'daily'
       ? '将此习惯复制为所选日期的单次任务，副本为未完成。'
       : '保留名称和标签，副本为未完成，原任务保持不变。';
     document.getElementById('copy-error').textContent = '';
+    renderCopyCalendar();
     document.getElementById('copy-dialog').showModal();
-    document.getElementById('copy-date').focus();
+    document.querySelector('#copy-calendar [aria-pressed="true"]').focus();
   }
 
   function getTasksByDate(dateKey) {
@@ -707,7 +775,40 @@
     var content = document.createElement('div');
     content.className = 'task-content';
 
-    if (isEditing) {
+    if (isEditing && type === 'monthly') {
+      var form = document.createElement('form'); form.className = 'monthly-edit-form';
+      var nameLabel = document.createElement('label'); nameLabel.textContent = '任务名称';
+      var nameInput = document.createElement('input'); nameInput.type = 'text';
+      nameInput.className = 'task-name-input'; nameInput.value = task.name; nameInput.maxLength = 50; nameInput.required = true;
+      nameInput.setAttribute('aria-label', '任务名称'); nameLabel.appendChild(nameInput);
+      var tagLabel = document.createElement('label'); tagLabel.textContent = '标签';
+      var tagSelect = document.createElement('select'); tagSelect.className = 'task-tag-select';
+      tagSelect.setAttribute('aria-label', '任务标签');
+      var noTag = document.createElement('option'); noTag.value = ''; noTag.textContent = '无标签'; tagSelect.appendChild(noTag);
+      state.tags.forEach(function(tag) {
+        var option = document.createElement('option'); option.value = tag.name; option.textContent = tag.name; tagSelect.appendChild(option);
+      });
+      if (task.category && !state.tags.some(function(tag) { return tag.name === task.category; })) {
+        var oldTag = document.createElement('option'); oldTag.value = task.category; oldTag.textContent = task.category; tagSelect.appendChild(oldTag);
+      }
+      tagSelect.value = task.category || ''; tagLabel.appendChild(tagSelect);
+      var editActions = document.createElement('div'); editActions.className = 'monthly-edit-actions';
+      var saveBtn = document.createElement('button'); saveBtn.type = 'submit'; saveBtn.className = 'history-today-btn edit-save'; saveBtn.textContent = '保存';
+      var cancelBtn = document.createElement('button'); cancelBtn.type = 'button'; cancelBtn.className = 'history-today-btn'; cancelBtn.textContent = '取消';
+      var editError = document.createElement('p'); editError.className = 'copy-error'; editError.setAttribute('role', 'alert');
+      function cancelMonthlyEdit() { editingState = null; render(); }
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (renameMonthlyTask(task.id, nameInput.value, tagSelect.value)) { editingState = null; render(); }
+        else editError.textContent = '保存失败，请检查名称和保存状态后重试。';
+      });
+      form.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.preventDefault(); cancelMonthlyEdit(); } });
+      cancelBtn.addEventListener('click', cancelMonthlyEdit);
+      editActions.appendChild(saveBtn); editActions.appendChild(cancelBtn);
+      form.appendChild(nameLabel); form.appendChild(tagLabel); form.appendChild(editActions); form.appendChild(editError);
+      content.appendChild(form);
+      setTimeout(function() { if (nameInput.isConnected) { nameInput.focus(); nameInput.select(); } }, 0);
+    } else if (isEditing) {
       var input = document.createElement('input');
       input.type = 'text';
       input.className = 'task-name-input';
@@ -771,7 +872,7 @@
       var name = document.createElement('span');
       name.className = 'task-name';
       name.textContent = task.name;
-      name.title = '双击编辑名称';
+      name.title = type === 'monthly' ? '双击编辑名称和标签' : '双击编辑名称';
       name.addEventListener('dblclick', function() {
         editingState = { type: type, id: task.id };
         render();
@@ -807,7 +908,8 @@
 
       var editBtn = document.createElement('button');
       editBtn.className = 'task-action-btn';
-      editBtn.setAttribute('aria-label', '编辑名称');
+      editBtn.setAttribute('aria-label', type === 'monthly' ? '编辑名称和标签' : '编辑名称');
+      editBtn.title = type === 'monthly' ? '编辑名称和标签' : '编辑名称';
       editBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -1091,10 +1193,12 @@
     } else {
       li.appendChild(checkbox);
       li.appendChild(content);
-      var hint = document.createElement('span');
-      hint.className = 'edit-hint';
-      hint.textContent = '回车保存';
-      li.appendChild(hint);
+      if (type === 'daily') {
+        var hint = document.createElement('span');
+        hint.className = 'edit-hint';
+        hint.textContent = '回车保存';
+        li.appendChild(hint);
+      }
     }
 
     return li;
@@ -1695,21 +1799,39 @@
     });
     var copyDialog = document.getElementById('copy-dialog');
     document.getElementById('copy-cancel').addEventListener('click', function() { copyDialog.close(); });
-    copyDialog.addEventListener('close', function() { copySource = null; });
+    copyDialog.addEventListener('close', function() { copySource = null; copyDates = []; });
+    ['copy-prev-month', 'copy-next-month'].forEach(function(id, index) {
+      document.getElementById(id).addEventListener('click', function() {
+        copyMonth = new Date(copyMonth.getFullYear(), copyMonth.getMonth() + (index ? 1 : -1), 1);
+        renderCopyCalendar();
+      });
+    });
+    document.getElementById('copy-clear-dates').addEventListener('click', function() {
+      copyDates = []; document.getElementById('copy-error').textContent = ''; renderCopyCalendar();
+    });
+    document.querySelectorAll('[data-copy-offset]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var date = new Date(); date.setDate(date.getDate() + Number(btn.dataset.copyOffset));
+        var key = formatDateKey(date);
+        if (copyDates.indexOf(key) < 0) copyDates.push(key);
+        copyMonth = new Date(date.getFullYear(), date.getMonth(), 1); renderCopyCalendar();
+        document.getElementById('copy-error').textContent = '';
+      });
+    });
     document.getElementById('copy-form').addEventListener('submit', function(e) {
       e.preventDefault();
       if (!copySource) return;
-      var dateKey = document.getElementById('copy-date').value;
-      var copy = copyTaskToDate(copySource.id, copySource.type, dateKey);
-      if (!copy) {
+      var copies = copyTaskToDates(copySource.id, copySource.type, copyDates);
+      if (!copies) {
         document.getElementById('copy-error').textContent = '复制失败，请检查日期和保存状态后重试。';
         return;
       }
+      var dateKey = copies[0].date;
       copyDialog.close();
       currentDate = dateKey; viewMonth = parseDateKey(dateKey); needScrollToToday = false;
       pendingScrollDate = dateKey;
       currentRoute = 'monthly'; location.hash = 'monthly'; render();
-      showStatus('已复制到 ' + dateKey + ' · 已保存');
+      showStatus('已复制 ' + copies.length + ' 份 · 正在查看 ' + dateKey + ' · 已保存在本机');
     });
     document.getElementById('undo-btn').addEventListener('click', function() {
       if (!undoSnapshot) return; state = JSON.parse(undoSnapshot); undoSnapshot = null;
@@ -1891,7 +2013,7 @@
   }
 
   window.DailyApp = {
-    uiVersion: 2,
+    uiVersion: 3,
     snapshot: function() { return DailySync.clone(state); },
     busy: function() {
       var el = document.activeElement;
